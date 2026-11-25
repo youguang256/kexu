@@ -140,6 +140,8 @@ public final class EduImportStore {
                 .putString(KEY_IMPORT, payload.toString())
                 .putString(KEY_LEGACY, rows.toString())   // 兼容老的 takeEduCourses 路径
                 .putString(KEY_AT, String.valueOf(System.currentTimeMillis()))
+                // 这份数据来自老系统页面解析，周次已经是教务口径，别再按 H5 的 nowWeek 偏移
+                .remove("eduNowWeek")
                 .apply();
     }
 
