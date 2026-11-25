@@ -776,7 +776,7 @@ public class EduLoginActivity extends Activity {
                                 String u = o.optString("u");
                                 if (!r.isEmpty()) {
                                     // 先把接口原文落盘：这是唯一能 100% 对上字段的依据
-                                    final String saved = dumpRaw("curriculum-captured.json", r);
+                                    final String saved = dumpRaw("curriculum-w" + (r.contains("\"nowWeek\"") ? "" : "") + System.currentTimeMillis() / 1000 % 100000 + ".json", r);
                                     if (importFromH5(r, u) > 0) {
                                         finished = true;
                                         toast("已抓取课表，正在导入…");
@@ -896,6 +896,31 @@ public class EduLoginActivity extends Activity {
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    /** 把一次响应里的 data[].item[] 收进 map（按 jx0408id+classTime+classWeekDetails 去重） */
+    private static int collectItems(String body, java.util.LinkedHashMap<String, org.json.JSONObject> out) {
+        if (body == null || body.isEmpty() || body.startsWith("__ERR__")) return 0;
+        int added = 0;
+        try {
+            org.json.JSONObject root = new org.json.JSONObject(body);
+            org.json.JSONArray data = root.optJSONArray("data");
+            if (data == null) return 0;
+            for (int d = 0; d < data.length(); d++) {
+                org.json.JSONObject day = data.optJSONObject(d);
+                if (day == null) continue;
+                org.json.JSONArray items = day.optJSONArray("item");
+                if (items == null) continue;
+                for (int i = 0; i < items.length(); i++) {
+                    org.json.JSONObject it = items.optJSONObject(i);
+                    if (it == null) continue;
+                    String key = it.optString("jx0408id", "") + "|" + it.optString("classTime", "")
+                            + "|" + it.optString("courseName", "") + "|" + it.optString("classWeekDetails", "");
+                    if (!out.containsKey(key)) { out.put(key, it); added++; }
+                }
+            }
+        } catch (Exception ignored) { }
+        return added;
     }
 
     private static int intOf(String s) {
@@ -1181,8 +1206,44 @@ public class EduLoginActivity extends Activity {
                 } catch (Exception ignored) {
                 }
 
+                // 接口一次只返回“当前周”的课（data[0].week=nowWeek），
+                // 所以按周补拉，合并成整学期 —— 否则别的周就会缺课。
                 String body = EduHttp.postH5(
                         base + "/student/curriculum?xnxq01id=&kbjcmsid=" + kbjcmsid, token);
+
+                java.util.LinkedHashMap<String, org.json.JSONObject> merged =
+                        new java.util.LinkedHashMap<>();
+                int baseCount = collectItems(body, merged);
+                int diffWeeks = 0;
+                for (int w = 1; w <= 20; w++) {
+                    String one = "";
+                    try {
+                        one = EduHttp.postH5(base + "/student/curriculum?xnxq01id=&kbjcmsid="
+                                + kbjcmsid + "&week=" + w, token);
+                    } catch (Exception ignored) { }
+                    int before = merged.size();
+                    collectItems(one, merged);
+                    if (merged.size() > before) diffWeeks++;
+                }
+                if (diffWeeks > 0 && !merged.isEmpty()) {
+                    try {
+                    org.json.JSONObject pack = new org.json.JSONObject();
+                    pack.put("Msg", "success~");
+                    pack.put("code", "1");
+                    pack.put("nowWeek", new org.json.JSONObject(body).optString("nowWeek", "0"));
+                    org.json.JSONArray items = new org.json.JSONArray();
+                    for (org.json.JSONObject o : merged.values()) items.put(o);
+                    org.json.JSONObject day = new org.json.JSONObject();
+                    day.put("weekday", "一");
+                    day.put("week", 0);
+                    day.put("item", items);
+                    org.json.JSONArray dataArr = new org.json.JSONArray();
+                    dataArr.put(day);
+                    pack.put("data", dataArr);
+                    body = pack.toString();
+                    dumpRaw("curriculum-merged.json", body);
+                    } catch (Exception ignored) { }
+                }
 
                 if (body == null || body.startsWith("__ERR__")) {
                     showDialog("课表抓取失败", String.valueOf(body));
