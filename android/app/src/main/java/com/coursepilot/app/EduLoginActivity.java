@@ -557,6 +557,7 @@ public class EduLoginActivity extends Activity {
 
     /** 把 Cookie 和三个接口的探测结果弹出来，便于定位抓不到的原因 */
     private void diagnose() {
+        dumpNetLog();          // 顺手把整份网络记录落盘
         final String cookie = CookieManager.getInstance().getCookie("https://jw.csuse.edu.cn");
         // WebView 的方法只能在主线程调用，先在主线程取出来
         final String curUrl = (web == null ? "-" : web.getUrl());
@@ -647,13 +648,14 @@ public class EduLoginActivity extends Activity {
 
     private static final java.util.List<String> CAP = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
 
+
     /** 在 jwh5 页面里挂钩 fetch / XHR，把接口调用记下来 */
     private void injectNetHook() {
         if (web == null) return;
         String js = "(function(){try{"
                 + "if(window.__cpHooked)return 'already';window.__cpHooked=1;window.__cpCap=[];"
                 + "function push(o){try{window.__cpCap.push(o);if(window.__cpCap.length>80)window.__cpCap.shift();}catch(e){}}"
-                + "function big(u,t){return /classtimetable|curriculum|teachingCourse|getXqKbJcMess/.test(u)?t.slice(0,200000):t.slice(0,160);}"
+                + "function big(u,t){return t.slice(0,120000);}"
                 + "var of=window.fetch;"
                 + "window.fetch=function(){var a=arguments[0];var u=(a&&a.url)?a.url:String(a);"
                 + "try{var h=(arguments[1]&&arguments[1].headers)||(a&&a.headers);if(h){if(h.get){var tv=h.get('token')||h.get('Token');if(tv)window.__cpToken=tv;}else{var tk=h.token||h.Token;if(tk)window.__cpToken=tk;}}}catch(e){}"
@@ -774,6 +776,25 @@ public class EduLoginActivity extends Activity {
                 });
             }
         }, 6000);
+    }
+
+    /** 把整份网络记录落盘：一次就能看清课表数据到底来自哪个接口 */
+    private void dumpNetLog() {
+        if (web == null) return;
+        web.evaluateJavascript("(function(){try{var a=(window.__cpCap||[]).map(function(c){"
+                + "return {m:c.m,u:c.u,s:c.s,l:c.l,t:(c.t||'').slice(0,60000)};});"
+                + "return btoa(unescape(encodeURIComponent(JSON.stringify(a))));}catch(e){return ''}})()", value -> {
+            String b64 = value == null ? "" : value.replace("\"", "");
+            if (b64.isEmpty()) { setStatus("网络记录为空"); return; }
+            try {
+                byte[] dec = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                String json = new String(dec, "UTF-8");
+                String path = dumpRaw("netlog.json", json);
+                setStatus("网络记录已存 " + (path == null ? "失败" : path));
+            } catch (Exception e) {
+                setStatus("记录落盘失败：" + e.getMessage());
+            }
+        });
     }
 
     /** 从 H5 的 sessionStorage 里取 token，然后直接调它的课表接口 */
