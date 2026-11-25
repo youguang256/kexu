@@ -281,6 +281,8 @@
     var start = P.parseYMD(st.settings.termStart);
     if (!start) return 1;
     var w = Math.floor(P.diffDays(start, new Date()) / 7) + 1;
+    // 学校教务的「第几周」有时和按开学日推算的差一两周，用这个偏移对齐
+    w += Number(st.settings.weekOffset || 0);
     return Math.max(1, Math.min(w, st.settings.totalWeeks));
   }
 
@@ -306,8 +308,9 @@
   function dateOfSession(week, weekday, st) {
     st = st || get();
     var start = P.parseYMD(st.settings.termStart) || new Date();
+    var off = Number(st.settings.weekOffset || 0);
     var d = new Date(start);
-    d.setDate(d.getDate() + (week - 1) * 7 + (weekday - 1));
+    d.setDate(d.getDate() + (week - 1 - off) * 7 + (weekday - 1));
     return d;
   }
 

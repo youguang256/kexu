@@ -1414,7 +1414,9 @@
         field('学期名称', '<input type="text" data-set="termName" value="' + esc(st.termName) + '">') +
         '<div class="field stack"><label>开学第一周周一</label>' +
         dtPicker({ set: 'termStart', value: st.termStart, time: false, placeholder: '选择日期' }) + '</div>' +
-        field('总周数', '<input type="number" min="1" max="30" data-set="totalWeeks" value="' + st.totalWeeks + '">'),
+        field('总周数', '<input type="number" min="1" max="30" data-set="totalWeeks" value="' + st.totalWeeks + '">') +
+        '<div class="field"><label>周次校正<span class="hint">教务显示第 N 周时，这里填差值</span></label>' +
+        '<input type="number" min="-3" max="3" data-set="weekOffset" value="' + (st.weekOffset || 0) + '"></div>',
         '第 ' + S.currentWeek(state) + ' 周 / 共 ' + st.totalWeeks + ' 周') +
       '<button class="btn block" data-act="open-manager" style="margin-top:10px">全局课程管理</button>' +
       '</div>';
