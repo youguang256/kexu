@@ -655,10 +655,13 @@ public class EduLoginActivity extends Activity {
                 + "function push(o){try{window.__cpCap.push(o);if(window.__cpCap.length>80)window.__cpCap.shift();}catch(e){}}"
                 + "function big(u,t){return /classtimetable|curriculum|teachingCourse|getXqKbJcMess/.test(u)?t.slice(0,200000):t.slice(0,160);}"
                 + "var of=window.fetch;"
-                + "window.fetch=function(){var a=arguments[0];var u=(a&&a.url)?a.url:String(a);var p=of.apply(this,arguments);"
+                + "window.fetch=function(){var a=arguments[0];var u=(a&&a.url)?a.url:String(a);"
+                + "try{var h=(arguments[1]&&arguments[1].headers)||(a&&a.headers);if(h){if(h.get){var tv=h.get('token')||h.get('Token');if(tv)window.__cpToken=tv;}else{var tk=h.token||h.Token;if(tk)window.__cpToken=tk;}}}catch(e){}"
+                + "var p=of.apply(this,arguments);"
                 + "try{p.then(function(r){try{r.clone().text().then(function(t){push({m:'fetch',u:u,s:r.status,l:t.length,t:big(u,t)});});}catch(e){}});}catch(e){}"
                 + "return p;};"
-                + "var oo=XMLHttpRequest.prototype.open,os=XMLHttpRequest.prototype.send;"
+                + "var oo=XMLHttpRequest.prototype.open,os=XMLHttpRequest.prototype.send,oh=XMLHttpRequest.prototype.setRequestHeader;"
+                + "XMLHttpRequest.prototype.setRequestHeader=function(k,v){try{if(/^token$/i.test(String(k)))window.__cpToken=v;}catch(e){}return oh.apply(this,arguments);};"
                 + "XMLHttpRequest.prototype.open=function(m,u){this.__m=m;this.__u=u;return oo.apply(this,arguments);};"
                 + "XMLHttpRequest.prototype.send=function(){var x=this;"
                 + "x.addEventListener('load',function(){try{var uu=String(x.__u);push({m:x.__m,u:uu,s:x.status,l:(x.responseText||'').length,t:big(uu,String(x.responseText||''))});}catch(e){}});"
@@ -686,16 +689,17 @@ public class EduLoginActivity extends Activity {
         }
         h5Jumped = true;
         setStatus("正在读取教务接口…");
-        web.loadUrl("https://jwh5.csuse.edu.cn/njwhd");
-        handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 4000);
-        handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 9000);
-        handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 15000);
+        // 不再跳走页面（用户还要在上面操作），直接问页面要 token
+        autoGrabH5();
+        handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 3000);
+        handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 8000);
     }
 
     /** 从 H5 的 sessionStorage 里取 token，然后直接调它的课表接口 */
     private void autoGrabH5() {
         if (web == null) return;
         web.evaluateJavascript("(function(){try{"
+                + "if(window.__cpToken&&String(window.__cpToken).length>10)return String(window.__cpToken);"
                 + "var keys=['Token','token','access_token','accessToken','Authorization','X-Token'];"
                 + "var st=[sessionStorage,localStorage];"
                 + "for(var i=0;i<st.length;i++){for(var j=0;j<keys.length;j++){var v=st[i].getItem(keys[j]);if(v&&v.length>10)return v;}}"
