@@ -27,3 +27,5 @@ server.log
 
 # build-apk.sh 会重新生成，不提交
 android/app/src/main/assets/
+*.apk
+coursepilot-debug.apk
