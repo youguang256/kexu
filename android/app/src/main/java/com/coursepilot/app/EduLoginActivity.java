@@ -240,6 +240,7 @@ public class EduLoginActivity extends Activity {
                     // 先切到 H5 站点直接用它的接口，拿不到再退回页面解析
                     handler.postDelayed(new Runnable() { public void run() { driveToTimetable(); } }, 1500);
                     handler.postDelayed(new Runnable() { public void run() { jumpToH5ThenGrab(); } }, 9000);
+        handler.postDelayed(new Runnable() { public void run() { hideFetchOverlay(); } }, 25000);
                     handler.postDelayed(new Runnable() { public void run() { grabFromDom(); } }, 16000);
                     handler.postDelayed(new Runnable() {
                         public void run() {
@@ -394,26 +395,29 @@ public class EduLoginActivity extends Activity {
 
     /** 全屏「正在获取课表」面板：网页在它下面继续运行 */
     private View buildFetchOverlay() {
+        // 只做一个贴底的小条，不要再盖住整页 —— 之前整屏遮罩害得页面点不动
         FrameLayout wrap = new FrameLayout(this);
-        wrap.setBackgroundColor(Color.parseColor("#0b0e13"));
+        wrap.setBackgroundColor(Color.TRANSPARENT);
+        wrap.setClickable(false);
+        wrap.setFocusable(false);
         wrap.setVisibility(View.GONE);
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setGravity(Gravity.CENTER_HORIZONTAL);
-        card.setPadding(48, 44, 48, 36);
+        card.setPadding(20, 14, 20, 10);
         android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
         bg.setColor(Color.parseColor("#131922"));
         bg.setCornerRadius(56f);
         card.setBackground(bg);
 
         android.widget.ProgressBar spin = new android.widget.ProgressBar(this);
-        card.addView(spin, new LinearLayout.LayoutParams(dp(38), dp(38)));
+        card.addView(spin, new LinearLayout.LayoutParams(dp(20), dp(20)));
 
         TextView title = new TextView(this);
-        title.setText("正在获取课表");
+        title.setText("正在获取课表…");
         title.setTextColor(Color.parseColor("#e8eef7"));
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 19);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         title.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -442,9 +446,10 @@ public class EduLoginActivity extends Activity {
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.gravity = Gravity.CENTER;
-        lp.leftMargin = dp(28);
-        lp.rightMargin = dp(28);
+        lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        lp.leftMargin = dp(24);
+        lp.rightMargin = dp(24);
+        lp.bottomMargin = dp(28);
         wrap.addView(card, lp);
 
         fetchOverlay = wrap;
