@@ -1,5 +1,7 @@
 package com.coursepilot.app;
 
+import android.content.Intent;
+import android.net.Uri;
 import android.app.Activity;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -631,6 +633,32 @@ public class NativeBridge {
         String v = sp.getString("eduPendingCourses", "");
         if (v != null && !v.isEmpty()) sp.edit().remove("eduPendingCourses").apply();
         return v == null ? "" : v;
+    }
+
+    /* ───────── 下载最新版 / 外部链接 ───────── */
+
+    /** 用系统浏览器打开链接：查更新、下载 APK、开仓库都走它 */
+    @JavascriptInterface
+    public void openExternal(final String url) {
+        if (url == null || url.isEmpty()) return;
+        act.runOnUiThread(new Runnable() {
+            @Override public void run() {
+                try {
+                    Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    act.startActivity(i);
+                } catch (Exception e) {
+                    android.widget.Toast.makeText(act, "打不开链接：" + e.getMessage(),
+                            android.widget.Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+    }
+
+    /** 不带 Cookie 的 GET：查 GitHub Releases 这类公开接口用 */
+    @JavascriptInterface
+    public String httpGetPlain(String url) {
+        return EduHttp.request(url, "GET", "", null);
     }
 
     @JavascriptInterface

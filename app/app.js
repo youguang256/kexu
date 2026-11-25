@@ -1535,6 +1535,87 @@
   var MCHEV = '<svg class="mchev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7l-7 7" ' +
     'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+  /** 下载最新版：配了 GitHub 仓库就比版本，没配就直接打开下载页 */
+  function openUrl(url) {
+    if (!url) return false;
+    var n = nativeBridge();
+    if (n && typeof n.openExternal === 'function') { n.openExternal(url); return true; }
+    try { window.open(url, '_blank'); return true; } catch (e) { return false; }
+  }
+
+  function cmpVer(a, b) {
+    var pa = String(a || '0').split('.'), pb = String(b || '0').split('.');
+    for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+      var x = parseInt(pa[i] || '0', 10) || 0, y = parseInt(pb[i] || '0', 10) || 0;
+      if (x !== y) return x > y ? 1 : -1;
+    }
+    return 0;
+  }
+
+  function checkUpdate() {
+    var cur = window.CP_VERSION || '';
+    var cfg = window.CP_BUILD || {};
+    var repo = String(cfg.updateRepo || '').trim();
+    var dl = String(cfg.downloadUrl || '').trim();
+    var relPage = repo ? ('https://github.com/' + repo + '/releases/latest') : '';
+    var fallback = dl || relPage;
+
+    function openSheetWith(html) { openSheet('下载最新版', html); }
+
+    if (!repo) {
+      openSheetWith(
+        '<div class="small muted" style="line-height:1.9">' +
+        (fallback
+          ? '当前版本：<b>' + esc(cur || '开发版') + '</b><br>点下面的按钮去下载页看看有没有新版。'
+          : '当前版本：<b>' + esc(cur || '开发版') + '</b><br>还没配置下载地址。<br>' +
+            '在 <code>app/build-config.js</code> 里填 <code>updateRepo</code> 或 <code>downloadUrl</code>，这里就会变成真的下载入口。') +
+        '</div>' +
+        (fallback
+          ? '<button class="btn primary block" data-act="more-download" style="margin-top:14px">打开下载页</button>'
+          : ''));
+      return;
+    }
+
+    openSheetWith('<div class="small muted">正在查询最新版本…</div>');
+    var api = 'https://api.github.com/repos/' + repo + '/releases/latest';
+    var body = '';
+    var n = nativeBridge();
+    try {
+      body = (n && typeof n.httpGetPlain === 'function') ? (n.httpGetPlain(api) || '') : '';
+    } catch (e) { body = ''; }
+
+    var paint = function (latest, note, extra) {
+      openSheetWith(
+        '<div class="small muted" style="line-height:1.9">' +
+        '当前版本：<b>' + esc(cur || '开发版') + '</b><br>' +
+        (latest ? '最新版本：<b>' + esc(latest) + '</b><br>' : '') +
+        (note || '') +
+        '</div>' +
+        (extra || '') +
+        '<button class="btn primary block" data-act="more-download" style="margin-top:14px">' +
+        (latest && cmpVer(latest, cur) > 0 ? '去下载 ' + esc(latest) : '打开下载页') + '</button>');
+    };
+
+    if (!body || body.indexOf('__ERR__:') === 0) {
+      paint('', '查询失败（可能是网络或仓库未发布 Release）。可以直接去下载页看看。');
+      return;
+    }
+    try {
+      var j = JSON.parse(body);
+      var latest = String((j && j.tag_name) || '').replace(/^v/i, '');
+      var name = (j && j.name) || '';
+      var notes = String((j && j.body) || '').split('\n').slice(0, 6).join('\n');
+      if (!latest) { paint('', '这个仓库还没有发布过 Release。'); return; }
+      var cmp = cmpVer(latest, cur);
+      var head = cmp > 0
+        ? '有新版本可用。'
+        : cmp === 0 ? '已经是最新版。' : '你这版比线上还新（开发版）。';
+      paint(latest, head + (notes ? '<br><span style="white-space:pre-line;display:block;margin-top:8px">' + esc(notes) + '</span>' : ''));
+    } catch (e) {
+      paint('', '返回内容看不懂，可能是接口限流。直接去下载页吧。');
+    }
+  }
+
   function renderMore() {
     var ver = window.CP_VERSION ? 'v' + window.CP_VERSION : '开发版';
     var langName = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', en: 'English' }[(state.settings.lang || 'zh-CN')] || '简体中文';
@@ -1554,7 +1635,7 @@
     /* 功能列表 */
     html += '<div class="mlist">' +
       '<button class="mrow" data-act="more-update">' + micon('update') +
-      '<span class="mlabel">检查软件更新</span><span class="mval">' + ver + '</span>' + MCHEV + '</button>' +
+      '<span class="mlabel">下载最新版本</span><span class="mval">当前 ' + ver + '</span>' + MCHEV + '</button>' +
       '<button class="mrow" data-act="more-lang">' + micon('lang') +
       '<span class="mlabel">语言设置</span><span class="mval">' + esc(langName) + '</span>' + MCHEV + '</button>' +
       '<button class="mrow" data-act="more-repo">' + micon('code') +
@@ -3027,12 +3108,17 @@
     }
     if (act === 'apply-import') { applyImport(pendingImport, el.dataset.mode); return; }
     if (act === 'export-ics') { download('coursepilot.ics', buildICS(), 'text/calendar;charset=utf-8'); toast('已导出，用手机打开导入日历'); return; }
-    if (act === 'open-more') { subView = 'more'; render(); return; }
-    if (act === 'close-more') { subView = ''; render(); return; }
-    if (act === 'more-update') {
-      toast('已经是最新版 ' + (window.CP_VERSION ? 'v' + window.CP_VERSION : '开发版'));
+    if (act === 'more-download') {
+      var cfgu = window.CP_BUILD || {};
+      var repou = String(cfgu.updateRepo || '').trim();
+      var urlu = String(cfgu.downloadUrl || '').trim() ||
+        (repou ? 'https://github.com/' + repou + '/releases/latest' : '');
+      if (!openUrl(urlu)) toast('还没配置下载地址');
       return;
     }
+    if (act === 'open-more') { subView = 'more'; render(); return; }
+    if (act === 'close-more') { subView = ''; render(); return; }
+    if (act === 'more-update') { checkUpdate(); return; }
     if (act === 'more-lang') {
       openSheet('语言设置', '<div class="seg" style="width:100%">' +
         ['zh-CN', 'zh-TW', 'en'].map(function (l) {
