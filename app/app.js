@@ -1535,6 +1535,58 @@
   var MCHEV = '<svg class="mchev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7l-7 7" ' +
     'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+  /** 开源许可面板：本项目 MIT + 第三方组件清单 */
+  function licenseHtml() {
+    var ver = window.CP_VERSION ? 'v' + window.CP_VERSION : '开发版';
+    var third = [
+      { name: 'AndroidX Webkit', ver: '1.11.0', lic: 'Apache License 2.0', use: 'WebView 资源加载、兼容性' },
+      { name: 'AndroidX Core', ver: '1.13.1', lic: 'Apache License 2.0', use: '权限、通知兼容' },
+      { name: 'Android Gradle Plugin', ver: '8.x', lic: 'Apache License 2.0', use: '仅构建期' },
+      { name: 'Gradle', ver: '8.9', lic: 'Apache License 2.0', use: '仅构建期' },
+      { name: 'Pillow（Python）', ver: '12.x', lic: 'HPND', use: '仅开发期生成图标' }
+    ];
+    var mit = [
+      'MIT License',
+      '',
+      'Copyright (c) 2026 cskjxy2026, youguang',
+      '',
+      'Permission is hereby granted, free of charge, to any person obtaining a copy',
+      'of this software and associated documentation files (the "Software"), to deal',
+      'in the Software without restriction, including without limitation the rights',
+      'to use, copy, modify, merge, publish, distribute, sublicense, and/or sell',
+      'copies of the Software, and to permit persons to whom the Software is',
+      'furnished to do so, subject to the following conditions:',
+      '',
+      'The above copyright notice and this permission notice shall be included in all',
+      'copies or substantial portions of the Software.',
+      '',
+      'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR',
+      'IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,',
+      'FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE',
+      'AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER',
+      'LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,',
+      'OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE',
+      'SOFTWARE.'
+    ].join(String.fromCharCode(10));
+
+    return '<div class="lic">' +
+      '<div class="lic-head"><b>课序 ' + esc(ver) + '</b><span class="mval">MIT</span></div>' +
+      '<div class="small muted" style="line-height:1.8">本项目以 MIT 协议开源，可自由使用、修改、分发，保留版权声明即可。</div>' +
+      '<details class="lic-mit"><summary>查看 MIT 协议全文</summary>' +
+      '<pre class="lic-text">' + esc(mit) + '</pre></details>' +
+      '<div class="sec-title" style="margin:18px 2px 8px">第三方组件</div>' +
+      third.map(function (t) {
+        return '<div class="lic-row"><div class="lr-main"><div class="lr-name">' + esc(t.name) +
+          (t.ver ? ' <span class="mval">' + esc(t.ver) + '</span>' : '') + '</div>' +
+          '<div class="lr-use">' + esc(t.use) + '</div></div>' +
+          '<span class="lr-lic">' + esc(t.lic) + '</span></div>';
+      }).join('') +
+      '<div class="small muted" style="margin-top:14px;line-height:1.8">' +
+      '图标、界面、教务适配脚本均为本项目原创，未引入第三方代码。' +
+      '学校教务系统与学习通的名称、商标归各自所有者。</div>' +
+      '</div>';
+  }
+
   /** 下载最新版：配了 GitHub 仓库就比版本，没配就直接打开下载页 */
   function openUrl(url) {
     if (!url) return false;
@@ -3127,16 +3179,20 @@
       return;
     }
     if (act === 'more-repo') {
-      openSheet('项目仓库', '<div class="small muted" style="line-height:1.9">' +
-        '仓库地址还没接入。<br>建好 GitHub 仓库后，把链接填进 app 的 GitHub 配置，' +
-        '这一行就会直接跳转过去。</div>');
+      var ru = String((window.CP_BUILD || {}).repoUrl || '').trim() ||
+        ('https://github.com/' + (String((window.CP_BUILD || {}).updateRepo || '').trim() || 'youguang256/kexu'));
+      openSheet('项目仓库',
+        '<div class="small muted" style="line-height:1.9">' + esc(ru) + '<br>' +
+        '源码、适配脚本、图标都是开源的，欢迎提 Issue 或 PR。</div>' +
+        '<button class="btn primary block" data-act="more-open-url" data-url="' + esc(ru) + '" style="margin-top:14px">在浏览器打开</button>');
+      return;
+    }
+    if (act === 'more-open-url') {
+      if (!openUrl(el.dataset.url)) toast('打不开链接');
       return;
     }
     if (act === 'more-license') {
-      openSheet('开源许可', '<div class="small muted" style="line-height:1.9">' +
-        '本项目使用到的开源组件：AndroidX、Gradle。<br>' +
-        '学校适配脚本由本人维护，未引入第三方代码。<br>' +
-        '完整许可证列表后续补上。</div>');
+      openSheet('开源许可', licenseHtml());
       return;
     }
     if (act === 'more-adapter') {

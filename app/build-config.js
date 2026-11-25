@@ -8,8 +8,8 @@ window.CP_BUILD = {
 
   // 下载最新版：把 GitHub 仓库写成 "用户名/仓库名"，就能自动比对版本
   // 例：updateRepo: 'cskjxy2026/coursepilot'
-  updateRepo: '',
+  updateRepo: 'youguang256/kexu',
   // 兜底下载地址（没配 updateRepo 时，按钮直接打开这里）
   // 例：downloadUrl: 'https://github.com/cskjxy2026/coursepilot/releases/latest'
-  downloadUrl: ''
+  downloadUrl: 'https://github.com/youguang256/kexu/releases/latest'
 };

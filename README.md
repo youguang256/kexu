@@ -126,6 +126,18 @@ window.CP_BUILD = {
 请遵守学校与平台的使用条款，不要用于批量爬取、代刷课等违规用途。
 因使用本工具造成的任何后果由使用者自行承担。
 
+## 第三方组件
+
+| 组件 | 版本 | 许可 | 用途 |
+|---|---|---|---|
+| AndroidX Webkit | 1.11.0 | Apache-2.0 | WebView 资源加载 |
+| AndroidX Core | 1.13.1 | Apache-2.0 | 权限 / 通知兼容 |
+| Android Gradle Plugin | 8.x | Apache-2.0 | 仅构建期 |
+| Gradle | 8.9 | Apache-2.0 | 仅构建期 |
+| Pillow（Python） | 12.x | HPND | 仅开发期生成图标 |
+
+图标、界面、教务适配脚本均为本项目原创。App 内「更多 → 查看开源许可证」可离线查看 MIT 全文与这份清单。
+
 ## 许可证
 
 [MIT](LICENSE) © 2026 cskjxy2026, youguang
