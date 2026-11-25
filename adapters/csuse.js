@@ -224,10 +224,101 @@
     return null;
   }
 
+  /**
+   * 兜底解析：完全按“屏幕上在哪”来判断星期与节次。
+   * 不理 rowspan/colspan/嵌套表格，只看元素的几何位置：
+   *   x 落在哪个「星期X」表头的范围内 = 星期几
+   *   y 离哪个「第X节」行标签最近 = 第几大节
+   * 这么写在结构再怪的教务页上也能拿到东西。
+   */
+  function collectByGeometry() {
+    var all = document.querySelectorAll('*');
+    var heads = [], rows = [];
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el.children.length > 2) continue;
+      var t = txt(el);
+      if (!t || t.length > 12) continue;
+      var r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) continue;
+      var mDay = /(?:星期|周)\s*([一二三四五六日天])/.exec(t);
+      if (mDay) {
+        var n = '一二三四五六'.indexOf(mDay[1]) + 1;
+        if (mDay[1] === '日' || mDay[1] === '天') n = 7;
+        heads.push({ day: n, l: r.left, r: r.right, y: r.top });
+        continue;
+      }
+      var mSec = /第?\s*([一二三四五六七八九十])\s*[、,，]?\s*([一二三四五六七八九十])?\s*节/.exec(t);
+      var mBig = /第\s*([一二三四五六七八九十])\s*节/.exec(t);
+      if (mSec || mBig || /^\s*[一二三四五六七八九十]{1,2}\s*节/.test(t)) {
+        rows.push({ y: r.top + r.height / 2, label: t });
+      }
+    }
+    if (heads.length < 3) return null;
+
+    var box = {}, out = {};
+    // 每个课名元素 → 按几何位置归属
+    var items = document.querySelectorAll('.qz-hasCourse-title, .kbcontent1, .title, li span, li div');
+    for (var k = 0; k < items.length; k++) {
+      var it = items[k];
+      var label = txt(it);
+      if (!label || label.length < 2) continue;
+      var rr = it.getBoundingClientRect();
+      if (rr.width < 10 || rr.height < 6) continue;
+      var cx = rr.left + rr.width / 2, cy = rr.top + rr.height / 2;
+
+      var day = 0;
+      heads.forEach(function (h) {
+        if (cx >= h.l - 4 && cx <= h.r + 4) day = h.day;
+      });
+      if (!day) continue;
+
+      // 找到包含这个课名的格子，用格子的纵向范围判断大节
+      var cell = it.closest ? (it.closest('td,li,div') || it) : it;
+      var cr = cell.getBoundingClientRect();
+      var secTop = cr.top, secBottom = cr.bottom;
+      var big = 0;
+      rows.forEach(function (row, idx) {
+        if (row.y >= secTop - 6 && row.y <= secBottom + 6) big = big || (idx + 1);
+      });
+      if (!big) {
+        // 退一步：用行标签的最近距离
+        var best = 1e9;
+        rows.forEach(function (row, idx) {
+          var d = Math.abs(row.y - cy);
+          if (d < best) { best = d; big = idx + 1; }
+        });
+      }
+      if (!big) continue;
+
+      var key = [label, day, big].join('|');
+      if (out[key]) continue;
+      out[key] = {
+        name: firstLine(label),
+        teacher: '未知',
+        position: '待定',
+        day: day,
+        startSection: big * 2 - 1,
+        endSection: big * 2,
+        weeks: []
+      };
+    }
+
+    var list = Object.keys(out).map(function (k) { return out[k]; });
+    if (!list.length) return null;
+    list.sort(function (a, b) { return a.day - b.day || a.startSection - b.startSection; });
+    return list;
+  }
+
   /** 把整张表读成拾光契约的课程数组 */
   function collect() {
     var table = findTable();
-    if (!table) return null;
+    if (!table) {
+      // 没有标准表格结构，直接按屏幕位置读
+      var geoOnly = collectByGeometry();
+      if (geoOnly) collect.diag = { via: 'geo', count: geoOnly.length };
+      return geoOnly;
+    }
 
     var grid = buildGrid(table);
     var hdr = weekdayCols(grid);
@@ -304,6 +395,16 @@
     out.sort(function (a, b) {
       return a.day - b.day || a.startSection - b.startSection || a.name.localeCompare(b.name);
     });
+
+    // 表格解析明显偏少（漏格）时，改用几何结果兜底，谁多信谁
+    var geo = null;
+    try { geo = collectByGeometry(); } catch (e) { geo = null; }
+    if (geo && geo.length > out.length) {
+      collect.diag = { via: 'geo', tableCount: out.length, geoCount: geo.length };
+      return geo;
+    }
+
+    diag.via = 'table';
     collect.diag = diag;
     return out;
   }
@@ -348,8 +449,9 @@
     }
 
     var dg = collect.diag || {};
-    B.showToast('解析到 ' + courses.length + ' 条（格子 ' + (dg.cells || 0) +
-      ' / 条目 ' + (dg.entries || 0) + ' / 无周次 ' + (dg.noWeeks || 0) + '），页面已存到下载/CoursePilot，抓不全就把那个文件发我');
+    var viaTxt = dg.via === 'geo' ? ('几何 ' + courses.length + ' 条') :
+      ('格子 ' + (dg.cells || 0) + '/条目 ' + (dg.entries || 0));
+    B.showToast('解析到 ' + courses.length + ' 条，' + viaTxt + '；页面已存到 下载/CoursePilot');
     safeDump('xskb');
 
     BP.saveImportedCourses(JSON.stringify(courses))

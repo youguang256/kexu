@@ -237,11 +237,9 @@ public class EduLoginActivity extends Activity {
                     hooksStarted = true;
                     setStatus("已登录，正在抓课表…");
                     injectNetHook();
+                    // 先切到 H5 站点直接用它的接口，拿不到再退回页面解析
+                    handler.postDelayed(new Runnable() { public void run() { jumpToH5ThenGrab(); } }, 800);
                     handler.postDelayed(new Runnable() { public void run() { driveToTimetable(); } }, 2500);
-                    // 接口方式优先：一次拿整学期（含所有周次）
-                    handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 6000);
-                    // 屏幕方式兜底（只有当前这一周）
-                    handler.postDelayed(new Runnable() { public void run() { grabFromDom(); } }, 15000);
                     handler.postDelayed(new Runnable() {
                         public void run() {
                             if (finished) return;
@@ -345,9 +343,8 @@ public class EduLoginActivity extends Activity {
                             hooksStarted = true;
                             setStatus("已登录，正在抓课表…");
                             injectNetHook();
+                            handler.postDelayed(new Runnable() { public void run() { jumpToH5ThenGrab(); } }, 800);
                             handler.postDelayed(new Runnable() { public void run() { driveToTimetable(); } }, 2500);
-                            handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 6000);
-                            handler.postDelayed(new Runnable() { public void run() { grabFromDom(); } }, 15000);
                         } else if (!stillLogin) {
                             // 停在门户首页（SPA 不触发 onPageFinished）时也主动点一次入口
                             if (href.indexOf("ps.csuse.edu.cn") >= 0 && !entryClicked && href.indexOf("/login") < 0) {
@@ -666,9 +663,24 @@ public class EduLoginActivity extends Activity {
     private volatile boolean h5Tried = false;
     private int h5Retry = 0;
 
+    private volatile boolean h5Jumped = false;
+
+    /** 登录成功后把页面切到 H5 站点：token 存在它自己的 sessionStorage 里，
+     *  停在 jw.csuse.edu.cn 上是读不到的 —— 这是「接口抓到 0 条」的根因。 */
+    private void jumpToH5ThenGrab() {
+        if (h5Jumped) return;
+        h5Jumped = true;
+        if (web == null) return;
+        setStatus("正在读取教务接口…");
+        web.loadUrl("https://jwh5.csuse.edu.cn/njwhd");
+        handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 4000);
+        handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 9000);
+        handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 15000);
+    }
+
     /** 从 H5 的 sessionStorage 里取 token，然后直接调它的课表接口 */
     private void autoGrabH5() {
-        if (h5Tried || web == null) return;
+        if (web == null) return;
         web.evaluateJavascript("(function(){try{"
                 + "var keys=['Token','token','access_token','accessToken','Authorization','X-Token'];"
                 + "var st=[sessionStorage,localStorage];"
