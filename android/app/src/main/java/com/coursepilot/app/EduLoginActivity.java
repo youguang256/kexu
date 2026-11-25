@@ -1250,48 +1250,61 @@ public class EduLoginActivity extends Activity {
                 } catch (Exception ignored) {
                 }
 
-                // 接口一次只返回“当前周”的课（data[0].week=nowWeek），别的周就缺课。
-                // 服务器不认死的参数名，先探一探哪个参数能让它返回别的周，再按周拉全。
+                // 真实调用顺序（从诊断里抓到的）：
+                //   POST /Get_sjkbms                       → kbjcmsid
+                //   POST /getXnxqList                      → 学期 id，如 2026-2027-2
+                //   POST /teachingWeek                     → 所有周次
+                //   POST /student/curriculum?xnxq01id=&kbjcmsid=&week=N  → 该周课表
+                // 一次只给一周，所以按周拉全再合并。
+                String term = "";
+                try {
+                    String xn = EduHttp.postH5(base + "/getXnxqList", token);
+                    org.json.JSONArray arr = new org.json.JSONArray(xn);
+                    for (int i = 0; i < arr.length(); i++) {
+                        org.json.JSONObject o = arr.optJSONObject(i);
+                        if (o == null) continue;
+                        String id = o.optString("xnxq01id", "");
+                        if (!id.isEmpty() && (term.isEmpty() || "0".equals(o.optString("isdcqxq")))) {
+                            term = id;
+                            if ("0".equals(o.optString("isdcqxq"))) break;
+                        }
+                    }
+                } catch (Exception ignored) { }
+
+                java.util.List<Integer> weeks = new java.util.ArrayList<>();
+                try {
+                    String tw = EduHttp.postH5(base + "/teachingWeek", token);
+                    org.json.JSONArray arr = new org.json.JSONObject(tw).optJSONArray("data");
+                    if (arr != null) for (int i = 0; i < arr.length(); i++) {
+                        org.json.JSONObject o = arr.optJSONObject(i);
+                        if (o == null) continue;
+                        int w = o.optInt("week", 0);
+                        if (w > 0) weeks.add(w);
+                    }
+                } catch (Exception ignored) { }
+                if (weeks.isEmpty()) for (int w = 1; w <= 20; w++) weeks.add(w);
+
                 String body = EduHttp.postH5(
-                        base + "/student/curriculum?xnxq01id=&kbjcmsid=" + kbjcmsid, token);
+                        base + "/student/curriculum?xnxq01id=" + term + "&kbjcmsid=" + kbjcmsid, token);
 
                 java.util.LinkedHashMap<String, org.json.JSONObject> merged =
                         new java.util.LinkedHashMap<>();
                 collectItems(body, merged);
-                String weekParam = probeWeekParam(base, kbjcmsid, token, body);
                 int diffWeeks = 0;
-                if (weekParam != null) {
-                    for (int w = 1; w <= 20; w++) {
-                        String one = "";
-                        try {
-                            one = EduHttp.postH5(base + "/student/curriculum?xnxq01id=&kbjcmsid="
-                                    + kbjcmsid + weekParam + w, token);
-                        } catch (Exception ignored) { }
-                        int before = merged.size();
-                        collectItems(one, merged);
-                        if (merged.size() > before) diffWeeks++;
-                    }
-                }
-                if (diffWeeks > 0 && !merged.isEmpty()) {
+                final StringBuilder log = new StringBuilder();
+                for (int wi = 0; wi < weeks.size() && wi < 30; wi++) {
+                    int w = weeks.get(wi);
+                    String one = "";
                     try {
-                    org.json.JSONObject pack = new org.json.JSONObject();
-                    pack.put("Msg", "success~");
-                    pack.put("code", "1");
-                    pack.put("nowWeek", new org.json.JSONObject(body).optString("nowWeek", "0"));
-                    org.json.JSONArray items = new org.json.JSONArray();
-                    for (org.json.JSONObject o : merged.values()) items.put(o);
-                    org.json.JSONObject day = new org.json.JSONObject();
-                    day.put("weekday", "一");
-                    day.put("week", 0);
-                    day.put("item", items);
-                    org.json.JSONArray dataArr = new org.json.JSONArray();
-                    dataArr.put(day);
-                    pack.put("data", dataArr);
-                    body = pack.toString();
-                    dumpRaw("curriculum-merged.json", body);
+                        one = EduHttp.postH5(base + "/student/curriculum?xnxq01id=" + term
+                                + "&kbjcmsid=" + kbjcmsid + "&week=" + w, token);
                     } catch (Exception ignored) { }
+                    int before = merged.size();
+                    int added = collectItems(one, merged);
+                    if (added > 0) diffWeeks++;
+                    log.append("w").append(w).append(":+").append(added).append(" ");
                 }
-
+                dumpRaw("weeks-log.txt", log.toString());
                 if (body == null || body.startsWith("__ERR__")) {
                     setStatus("课表抓取失败：" + String.valueOf(body));
                     curGrab = false;
