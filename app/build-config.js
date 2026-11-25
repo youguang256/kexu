@@ -15,8 +15,8 @@ window.CP_BUILD = {
 
   // 下载渠道：GitHub 会自动用上面的仓库；其余三条把链接填进来即可
   channels: {
-    quark: '',        // 夸克网盘分享链接
-    pan123: '',       // 123 云盘分享链接
+    quark: 'https://pan.quark.cn/s/8343c51ba274',   // 夸克网盘
+    pan123: 'https://4000728964.share.123pan.cn/123pan/sM8lMh-vaMXA',   // 123 云盘
     qq: '1137676166'  // QQ 群号
   }
 };
