@@ -661,6 +661,15 @@ public class NativeBridge {
         return EduHttp.request(url, "GET", "", null);
     }
 
+    /** 教务接口返回的“当前第几周”（H5 的 nowWeek），用来对齐学期起点 */
+    @JavascriptInterface
+    public String takeEduNowWeek() {
+        try {
+            return act.getSharedPreferences("coursepilot", android.content.Context.MODE_PRIVATE)
+                    .getString("eduNowWeek", "");
+        } catch (Exception e) { return ""; }
+    }
+
     @JavascriptInterface
     public String platform() {
         return "android";

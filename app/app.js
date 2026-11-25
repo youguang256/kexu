@@ -3763,8 +3763,29 @@
     });
     var list = Object.keys(courses).map(function (k) { return courses[k]; });
     if (!list.length) return 0;
-    // 首次导入时铺一个合理学期起点（和 0.6.3 一致；用户改过就不覆盖）
-    if (!state.settings.termStartSet) {
+    // 教务 H5 的周次比教务网页显示的少 1（接口 nowWeek=12 时网页是第 13 周），
+    // 用 nowWeek 把学期起点对齐到教务口径，课程周次同步 +1
+    var n = nativeBridge();
+    var nowWeek = 0;
+    try { nowWeek = Number((n && n.takeEduNowWeek && n.takeEduNowWeek()) || 0); } catch (e) { nowWeek = 0; }
+    if (nowWeek > 0) {
+      list.forEach(function (c) {
+        (c.sessions || []).forEach(function (ss) {
+          if (Array.isArray(ss.weeks) && ss.weeks.length) {
+            ss.weeks = ss.weeks.map(function (w) { return w + 1; });
+          }
+        });
+      });
+      // 本周 = nowWeek + 1 → 第 1 周的周一 = 本周周一 − nowWeek 周
+      var d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - nowWeek * 7);
+      state.settings.termStart = d.getFullYear() + '-' +
+        String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      state.settings.termStartSet = true;
+      if (!state.settings.totalWeeks || state.settings.totalWeeks < 18) state.settings.totalWeeks = 20;
+    } else if (!state.settings.termStartSet) {
+      // 拿不到 nowWeek 时的兜底
       state.settings.termStart = '2026-09-07';
       state.settings.totalWeeks = 20;
       state.settings.termStartSet = true;

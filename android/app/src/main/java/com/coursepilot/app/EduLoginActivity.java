@@ -817,6 +817,13 @@ public class EduLoginActivity extends Activity {
             org.json.JSONArray data = root.optJSONArray("data");
             if (data == null) return 0;
 
+            // 学校接口的 nowWeek：前端据此对齐学期起点（教务周次常常比它大 1）
+            int nowWeek = root.optInt("nowWeek", 0);
+            if (nowWeek > 0) {
+                getSharedPreferences("coursepilot", MODE_PRIVATE).edit()
+                        .putString("eduNowWeek", String.valueOf(nowWeek)).apply();
+            }
+
             org.json.JSONArray out = new org.json.JSONArray();
 
             for (int d = 0; d < data.length(); d++) {
