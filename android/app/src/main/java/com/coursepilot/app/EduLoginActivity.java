@@ -765,6 +765,8 @@ public class EduLoginActivity extends Activity {
                                 String r = o.optString("r");
                                 String u = o.optString("u");
                                 if (!r.isEmpty()) {
+                                    // 先把接口原文落盘：这是唯一能 100% 对上字段的依据
+                                    final String saved = dumpRaw("curriculum-captured.json", r);
                                     if (importFromH5(r, u) > 0) {
                                         finished = true;
                                         toast("已抓取课表，正在导入…");
@@ -772,7 +774,11 @@ public class EduLoginActivity extends Activity {
                                         finish();
                                         return;
                                     }
-                                    showDialog("课表接口返回", u + NL() + NL() + r);
+                                    showDialog("课表接口返回（没解析出来）",
+                                        u + NL() + NL()
+                                        + "原文已存：" + (saved == null ? "落盘失败" : saved) + NL() + NL()
+                                        + "把上面这个 json 文件发我，我按真实字段改。" + NL() + NL()
+                                        + r);
                                     return;
                                 }
                             } catch (Exception ignored) {
