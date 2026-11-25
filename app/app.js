@@ -1629,7 +1629,7 @@
         '<span class="mlabel">QQ 群<span class="lr-use" style="display:block">群里也能拿到安装包</span></span>' +
         '<span class="mval">' + (ch.qq ? '群号 ' + esc(ch.qq) : '待填写') + '</span>' + MCHEV + '</button>' +
         '<button class="mrow" data-act="dl-channel" data-k="pan123">' +
-        '<span class="mlabel">123 云盘<span class="lr-use" style="display:block">不限速下载</span></span>' +
+        '<span class="mlabel">123 云盘</span>' +
         '<span class="mval">' + (ch.pan123 ? '已配置' : '待填写') + '</span>' + MCHEV + '</button>' +
         '</div>';
     }
