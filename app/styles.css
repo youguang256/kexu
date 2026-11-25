@@ -1429,16 +1429,22 @@ html.has-bg.glass-light .hdr { background: none; }
 .more-icon {
   width: 88px;
   height: 88px;
-  border-radius: 24px;
   display: grid;
   place-items: center;
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.more-icon img {
+  width: 88px;
+  height: 88px;
+  border-radius: 22px;
+  display: block;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--bg) 45%, transparent);
 }
 .more-icon svg { width: 52px; height: 52px; }
 .more-name { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
 .more-ver { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.mlist + .sec-title,
+.more-entry + .sec-title { margin-top: 20px; }
 
 .mlist {
   background: var(--surface);
@@ -1474,7 +1480,7 @@ html.has-bg.glass-light .hdr { background: none; }
   align-items: center;
   gap: 14px;
   width: 100%;
-  margin: 12px 0 24px;
+  margin: 12px 0 44px;
   padding: 20px 18px;
   background: var(--surface);
   border: 1px solid var(--line-soft);

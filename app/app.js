@@ -1624,10 +1624,8 @@
     /* 顶部：图标 + 名字 + 版本 */
     html += '<div class="more-hero">' +
       '<div class="more-icon">' +
-      '<svg viewBox="0 0 48 48" aria-hidden="true">' +
-      '<rect x="7" y="11" width="34" height="26" rx="4" fill="none" stroke="currentColor" stroke-width="2.6"/>' +
-      '<path d="M7 19h34M17 19v18M27 19v18M7 27h34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
-      '</svg></div>' +
+      '<img src="./icons/icon-512.png" alt="" width="88" height="88">' +
+      '</div>' +
       '<div class="more-name">课序</div>' +
       '<div class="more-ver">' + ver + ' · 长沙科技学院</div>' +
       '</div>';
