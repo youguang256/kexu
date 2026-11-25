@@ -1,5 +1,6 @@
 package com.coursepilot.app;
 
+import android.os.Build;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
@@ -340,12 +341,31 @@ public class AdapterActivity extends Activity {
     }
 
     /** 排障：把当前页面 HTML 存到 App 外部目录，路径会打在状态栏那一行 */
+    /**
+     * 把课表页面存到「下载/CoursePilot」，用户拿文件管理器就能找到并发出来。
+     * 之前存在 Android/data/... 里，安卓 11 以后很难取到，排查全靠猜。
+     */
     private void dumpPage(String name, String html) {
+        String safe = name.replaceAll("[^A-Za-z0-9._-]", "_") + ".html";
         try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                android.content.ContentValues cv = new android.content.ContentValues();
+                cv.put(android.provider.MediaStore.Downloads.DISPLAY_NAME, safe);
+                cv.put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/html");
+                cv.put(android.provider.MediaStore.Downloads.RELATIVE_PATH, "Download/CoursePilot");
+                android.net.Uri uri = getContentResolver()
+                        .insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                if (uri != null) {
+                    java.io.OutputStream os = getContentResolver().openOutputStream(uri);
+                    os.write(html.getBytes(StandardCharsets.UTF_8));
+                    os.close();
+                    setStatus("课表页面已存到 下载/CoursePilot/" + safe);
+                    return;
+                }
+            }
             File dir = new File(getExternalFilesDir(null), "dump");
             if (!dir.exists()) dir.mkdirs();
-            String safe = name.replaceAll("[^A-Za-z0-9._-]", "_");
-            File f = new File(dir, safe + ".html");
+            File f = new File(dir, safe);
             try (FileOutputStream out = new FileOutputStream(f)) {
                 out.write(html.getBytes(StandardCharsets.UTF_8));
             }

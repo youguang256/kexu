@@ -348,8 +348,9 @@
     }
 
     var dg = collect.diag || {};
-    B.showToast('解析到 ' + courses.length + ' 条（有课格子 ' + (dg.cells || 0) +
-      ' / 条目 ' + (dg.entries || 0) + ' / 无周次 ' + (dg.noWeeks || 0) + '），正在写入…');
+    B.showToast('解析到 ' + courses.length + ' 条（格子 ' + (dg.cells || 0) +
+      ' / 条目 ' + (dg.entries || 0) + ' / 无周次 ' + (dg.noWeeks || 0) + '），页面已存到下载/CoursePilot，抓不全就把那个文件发我');
+    safeDump('xskb');
 
     BP.saveImportedCourses(JSON.stringify(courses))
       .then(function () { return BP.saveCourseConfig(JSON.stringify(cfg)); })
