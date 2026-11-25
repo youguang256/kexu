@@ -1,0 +1,16 @@
+javascript:(async function(){
+  var T='',K=['Token','token','access_token','accessToken','X-Token'];
+  [sessionStorage,localStorage].forEach(function(s){K.forEach(function(k){var v=s.getItem(k);if(!v)return;if(v.charAt(0)==='"')v=JSON.parse(v);if(v&&String(v).length>10&&!T)T=String(v);});});
+  if(!T){alert('没找到 token：先登录 jwh5.csuse.edu.cn');return;}
+  var B='https://jwh5.csuse.edu.cn/njwhd';
+  function post(u){return fetch(u,{method:'POST',headers:{token:T},credentials:'include'}).then(function(r){return r.text();});}
+  var mode=await post(B+'/Get_sjkbms');
+  var id='';
+  try{var arr=(JSON.parse(mode).data)||[];arr.forEach(function(o){if(!id||o.mrms==='1')id=o.kbjcmsid;});}catch(e){}
+  var body=await post(B+'/student/curriculum?xnxq01id=&kbjcmsid='+(id||''));
+  var blob=new Blob([body],{type:'application/json'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='curriculum.json';a.click();
+  var txt=body.slice(0,1200);
+  prompt('已下载 curriculum.json（kbjcmsid='+id+'）。下面是前 1200 字，可直接复制：',txt);
+})();
