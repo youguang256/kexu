@@ -1614,6 +1614,26 @@
 
     function openSheetWith(html) { openSheet('下载最新版', html); }
 
+    // 四个下载渠道：GitHub 走仓库，其余从配置里取
+    function channelsHtml() {
+      var ch = cfg.channels || {};
+      var ghVal = repo ? 'GitHub Releases' : '待配置';
+      return '<div class="mlist" style="margin-top:14px">' +
+        '<button class="mrow" data-act="dl-channel" data-k="github">' +
+        '<span class="mlabel">GitHub<span class="lr-use" style="display:block">Release 页面，速度看网络</span></span>' +
+        '<span class="mval">' + esc(ghVal) + '</span>' + MCHEV + '</button>' +
+        '<button class="mrow" data-act="dl-channel" data-k="quark">' +
+        '<span class="mlabel">夸克网盘<span class="lr-use" style="display:block">国内直连，推荐</span></span>' +
+        '<span class="mval">' + (ch.quark ? '已配置' : '待填写') + '</span>' + MCHEV + '</button>' +
+        '<button class="mrow" data-act="dl-channel" data-k="qq">' +
+        '<span class="mlabel">QQ 群<span class="lr-use" style="display:block">群里也能拿到安装包</span></span>' +
+        '<span class="mval">' + (ch.qq ? '群号 ' + esc(ch.qq) : '待填写') + '</span>' + MCHEV + '</button>' +
+        '<button class="mrow" data-act="dl-channel" data-k="pan123">' +
+        '<span class="mlabel">123 云盘<span class="lr-use" style="display:block">不限速下载</span></span>' +
+        '<span class="mval">' + (ch.pan123 ? '已配置' : '待填写') + '</span>' + MCHEV + '</button>' +
+        '</div>';
+    }
+
     if (!repo) {
       openSheetWith(
         '<div class="small muted" style="line-height:1.9">' +
@@ -1622,9 +1642,7 @@
           : '当前版本：<b>' + esc(cur || '开发版') + '</b><br>还没配置下载地址。<br>' +
             '在 <code>app/build-config.js</code> 里填 <code>updateRepo</code> 或 <code>downloadUrl</code>，这里就会变成真的下载入口。') +
         '</div>' +
-        (fallback
-          ? '<button class="btn primary block" data-act="more-download" style="margin-top:14px">打开下载页</button>'
-          : ''));
+        channelsHtml());
       return;
     }
 
@@ -1644,8 +1662,7 @@
         (note || '') +
         '</div>' +
         (extra || '') +
-        '<button class="btn primary block" data-act="more-download" style="margin-top:14px">' +
-        (latest && cmpVer(latest, cur) > 0 ? '去下载 ' + esc(latest) : '打开下载页') + '</button>');
+        channelsHtml());
     };
 
     if (!body || body.indexOf('__ERR__:') === 0) {
@@ -3158,12 +3175,26 @@
     }
     if (act === 'apply-import') { applyImport(pendingImport, el.dataset.mode); return; }
     if (act === 'export-ics') { download('coursepilot.ics', buildICS(), 'text/calendar;charset=utf-8'); toast('已导出，用手机打开导入日历'); return; }
-    if (act === 'more-download') {
-      var cfgu = window.CP_BUILD || {};
-      var repou = String(cfgu.updateRepo || '').trim();
-      var urlu = String(cfgu.downloadUrl || '').trim() ||
-        (repou ? 'https://github.com/' + repou + '/releases/latest' : '');
-      if (!openUrl(urlu)) toast('还没配置下载地址');
+    if (act === 'dl-channel') {
+      var ck = el.dataset.k;
+      var cch = (window.CP_BUILD || {}).channels || {};
+      var crepo = String((window.CP_BUILD || {}).updateRepo || '').trim();
+      if (ck === 'github') {
+        var gurl = String((window.CP_BUILD || {}).downloadUrl || '').trim() ||
+          (crepo ? 'https://github.com/' + crepo + '/releases/latest' : '');
+        if (!openUrl(gurl)) toast('还没配置仓库地址');
+      } else if (ck === 'qq') {
+        var gnum = String(cch.qq || '').trim();
+        if (!gnum) { toast('还没配置 QQ 群号'); return; }
+        // 优先唤起 QQ 加群卡片，没装 QQ 就把群号告诉你
+        openUrl('mqqapi://card/show_pslcard?src_type=internal&version=1&uin=' + gnum +
+          '&card_type=group&source=qrcode');
+        toast('已尝试打开 QQ，群号 ' + gnum, 4000);
+      } else {
+        var u2 = String(cch[ck] || '').trim();
+        if (!u2) { toast('这个渠道还没填链接，先在 build-config 里补上'); return; }
+        if (!openUrl(u2)) toast('打不开这个链接');
+      }
       return;
     }
     if (act === 'open-more') { subView = 'more'; render(); return; }

@@ -11,5 +11,12 @@ window.CP_BUILD = {
   updateRepo: 'youguang256/kexu',
   // 兜底下载地址（没配 updateRepo 时，按钮直接打开这里）
   // 例：downloadUrl: 'https://github.com/cskjxy2026/coursepilot/releases/latest'
-  downloadUrl: 'https://github.com/youguang256/kexu/releases/latest'
+  downloadUrl: 'https://github.com/youguang256/kexu/releases/latest',
+
+  // 下载渠道：GitHub 会自动用上面的仓库；其余三条把链接填进来即可
+  channels: {
+    quark: '',        // 夸克网盘分享链接
+    pan123: '',       // 123 云盘分享链接
+    qq: '1137676166'  // QQ 群号
+  }
 };
