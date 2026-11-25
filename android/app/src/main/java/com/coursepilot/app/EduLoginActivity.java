@@ -239,7 +239,7 @@ public class EduLoginActivity extends Activity {
                     injectNetHook();
                     // 先切到 H5 站点直接用它的接口，拿不到再退回页面解析
                     handler.postDelayed(new Runnable() { public void run() { driveToTimetable(); } }, 1500);
-                    handler.postDelayed(new Runnable() { public void run() { jumpToH5ThenGrab(); } }, 9000);
+                    handler.postDelayed(new Runnable() { public void run() { sweepWeeksThenImport(); } }, 4000);
         handler.postDelayed(new Runnable() { public void run() { hideFetchOverlay(); } }, 25000);
                     handler.postDelayed(new Runnable() { public void run() { grabFromDom(); } }, 16000);
                     handler.postDelayed(new Runnable() {
@@ -346,7 +346,7 @@ public class EduLoginActivity extends Activity {
                             setStatus("已登录，正在抓课表…");
                             injectNetHook();
                             handler.postDelayed(new Runnable() { public void run() { driveToTimetable(); } }, 1500);
-                            handler.postDelayed(new Runnable() { public void run() { jumpToH5ThenGrab(); } }, 9000);
+                            handler.postDelayed(new Runnable() { public void run() { sweepWeeksThenImport(); } }, 4000);
                             handler.postDelayed(new Runnable() { public void run() { grabFromDom(); } }, 16000);
                         } else if (!stillLogin) {
                             // 停在门户首页（SPA 不触发 onPageFinished）时也主动点一次入口
@@ -693,6 +693,84 @@ public class EduLoginActivity extends Activity {
         autoGrabH5();
         handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 3000);
         handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 8000);
+    }
+
+    /**
+     * 学校后端只认“页面自己点周次”发出来的请求 —— 我们直接 POST 拿不到别的周。
+     * 所以在页面里模拟点「下一周 / 上一周」箭头，靠已有的网络钩子把每周响应收下来，
+     * 再在页面里合并成一份课表。
+     */
+    private void sweepWeeksThenImport() {
+        if (web == null) return;
+        setStatus("正在按周翻页抓取…（每翻一页约 1.4 秒）");
+        String js = "(function(){"
+                + "if(window.__cpSweep)return 'busy';window.__cpSweep=1;window.__cpWeekBodies=[];"
+                + "var seen={};"
+                + "function harvest(){(window.__cpCap||[]).forEach(function(c){"
+                + "  if(!/curriculum/i.test(c.u||''))return;"
+                + "  var k=c.u+'|'+(c.t||'').length;if(seen[k])return;seen[k]=1;"
+                + "  if(c.t&&c.t.indexOf('\"item\"')>=0)window.__cpWeekBodies.push(c.t);});}"
+                + "function arrows(){var all=[].slice.call(document.querySelectorAll('i,span,button,div,em'));"
+                + "  var out=[];all.forEach(function(e){if(e.children.length>1)return;"
+                + "    var t=(e.innerText||'').trim();var c=String(e.className||'');"
+                + "    var isArrow=/^[<>‹›❮❯]$/.test(t)||/arrow|prev|next/i.test(c);if(!isArrow)return;"
+                + "    var r=e.getBoundingClientRect();if(r.width<8||r.height<8)return;"
+                + "    if(r.top<0||r.top>window.innerHeight)return;out.push({el:e,x:r.left});});"
+                + "  out.sort(function(a,b){return a.x-b.x;});return out;}"
+                + "var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};"
+                + "(async function(){try{"
+                + "  var a=arrows();if(a.length<2){window.__cpSweep='no-arrows';return;}"
+                + "  var next=a[a.length-1].el,prev=a[0].el;"
+                + "  for(var i=0;i<12;i++){next.click();await sleep(1400);harvest();}"
+                + "  for(var j=0;j<12;j++){prev.click();await sleep(1400);harvest();}"
+                + "  var items={};"
+                + "  window.__cpWeekBodies.forEach(function(b){try{var o=JSON.parse(b);"
+                + "    (o.data||[]).forEach(function(d){(d.item||[]).forEach(function(it){"
+                + "      var k=(it.jx0408id||'')+'|'+(it.classTime||'')+'|'+(it.courseName||'');items[k]=it;});});"
+                + "  }catch(e){}});"
+                + "  var arr=Object.keys(items).map(function(k){return items[k];});"
+                + "  var pack={Msg:'success~',code:'1',nowWeek:(window.__cpNowWeek||'0'),data:[{weekday:'一',week:0,item:arr}]};"
+                + "  var s=JSON.stringify(pack);"
+                + "  var b='';try{b=btoa(unescape(encodeURIComponent(s)));}catch(e){b='';}"
+                + "  window.__cpMerged=b;window.__cpSweep=2;"
+                + "}catch(e){window.__cpSweep='err:'+e.message;}})();"
+                + "return 'started';})()";
+        web.evaluateJavascript(js, null);
+
+        // 轮询结果（12+12 次翻页 ≈ 35 秒）
+        final int[] tries = {0};
+        handler.postDelayed(new Runnable() {
+            public void run() {
+                if (web == null) return;
+                web.evaluateJavascript("(function(){try{return window.__cpMerged||''}catch(e){return ''}})()", value -> {
+                    String b64 = value == null ? "" : value.replace("\"", "");
+                    if (!b64.isEmpty()) {
+                        try {
+                            byte[] dec = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                            final String merged = new String(dec, "UTF-8");
+                            dumpRaw("curriculum-swept.json", merged);
+                            int n = importFromH5(merged, "swept");
+                            apiCount = n;
+                            if (n > 0) {
+                                setStatus("已按周抓取 " + n + " 条，正在导入…");
+                                EduCookies.saveAll(EduLoginActivity.this);
+                                finished = true;
+                                setResult(RESULT_OK);
+                                finish();
+                                return;
+                            }
+                            setStatus("翻页抓到了数据但没解析出来（已存 curriculum-swept.json）");
+                            return;
+                        } catch (Exception ignored) { }
+                    }
+                    if (tries[0]++ < 60) {
+                        handler.postDelayed(this, 1500);
+                    } else {
+                        setStatus("翻页抓取超时（点「诊断」看捕获到的接口）");
+                    }
+                });
+            }
+        }, 6000);
     }
 
     /** 从 H5 的 sessionStorage 里取 token，然后直接调它的课表接口 */
