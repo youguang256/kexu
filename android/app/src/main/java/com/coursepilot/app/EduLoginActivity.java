@@ -558,6 +558,7 @@ public class EduLoginActivity extends Activity {
     /** 把 Cookie 和三个接口的探测结果弹出来，便于定位抓不到的原因 */
     private void diagnose() {
         dumpNetLog();          // 顺手把整份网络记录落盘
+        dumpGridDom();         // 再把渲染出来的课表 DOM 存一份
         final String cookie = CookieManager.getInstance().getCookie("https://jw.csuse.edu.cn");
         // WebView 的方法只能在主线程调用，先在主线程取出来
         final String curUrl = (web == null ? "-" : web.getUrl());
@@ -776,6 +777,35 @@ public class EduLoginActivity extends Activity {
                 });
             }
         }, 6000);
+    }
+
+    /** 把「渲染出来的课表」整块 DOM 存下来：这是页面自己算好的结果，最可信 */
+    private void dumpGridDom() {
+        if (web == null) return;
+        String js = "(function(){try{"
+                + "var lab='';var m=document.body.innerText.match(/第\\s*\\d+\\s*周/);if(m)lab=m[0];"
+                + "var best=null,bestScore=-1;"
+                + "var all=document.querySelectorAll('div,table,section');"
+                + "for(var i=0;i<all.length;i++){var e=all[i];var t=e.innerText||'';"
+                + "  var score=0;if(/第[一二三四五六七八九十]+节|\\d{1,2}\\s*[:：]\\s*\\d{2}/.test(t))score+=2;"
+                + "  if(/星期|周[一二三四五六日]/.test(t))score+=1;"
+                + "  if(score>bestScore&&t.length>40){bestScore=score;best=e;}}"
+                + "if(!best)return '';"
+                + "var html=best.outerHTML||'';"
+                + "var pack={week:lab,score:bestScore,len:html.length,html:html.slice(0,300000)};"
+                + "return btoa(unescape(encodeURIComponent(JSON.stringify(pack))));"
+                + "}catch(e){return ''}})()";
+        web.evaluateJavascript(js, value -> {
+            String b64 = value == null ? "" : value.replace("\"", "");
+            if (b64.isEmpty()) { setStatus("没找到课表容器的 DOM"); return; }
+            try {
+                byte[] dec = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                String path = dumpRaw("grid-dom.json", new String(dec, "UTF-8"));
+                setStatus("课表 DOM 已存 " + (path == null ? "失败" : path));
+            } catch (Exception e) {
+                setStatus("格子落盘失败：" + e.getMessage());
+            }
+        });
     }
 
     /** 把整份网络记录落盘：一次就能看清课表数据到底来自哪个接口 */
