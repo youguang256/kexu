@@ -898,6 +898,40 @@ public class EduLoginActivity extends Activity {
         }
     }
 
+    /**
+     * 服务器认哪个参数才返回“指定周”？挨个试，用返回内容判断，不猜。
+     * 判定：返回的 data[0].week 等于试探周次，或条目集合与当前周不同。
+     */
+    private String probeWeekParam(String base, String kbjcmsid, String token, String baseline) {
+        String[] cands = {"&week=", "&zc=", "&nowWeek=", "&jxz=", "&weekNum=", "&qs="};
+        java.util.HashSet<String> baseKeys = new java.util.HashSet<>();
+        try {
+            java.util.LinkedHashMap<String, org.json.JSONObject> m = new java.util.LinkedHashMap<>();
+            collectItems(baseline, m);
+            baseKeys.addAll(m.keySet());
+        } catch (Exception ignored) { }
+
+        for (String c : cands) {
+            try {
+                String one = EduHttp.postH5(base + "/student/curriculum?xnxq01id=&kbjcmsid="
+                        + kbjcmsid + c + "3", token);
+                if (one == null || one.isEmpty() || one.startsWith("__ERR__")) continue;
+                org.json.JSONObject root = new org.json.JSONObject(one);
+                org.json.JSONArray data = root.optJSONArray("data");
+                int wk = 0;
+                java.util.LinkedHashMap<String, org.json.JSONObject> m2 = new java.util.LinkedHashMap<>();
+                collectItems(one, m2);
+                if (data != null && data.length() > 0) {
+                    org.json.JSONObject d0 = data.optJSONObject(0);
+                    if (d0 != null) wk = d0.optInt("week", 0);
+                }
+                boolean different = wk == 3 || !m2.keySet().equals(baseKeys);
+                if (different && !m2.isEmpty()) return c;
+            } catch (Exception ignored) { }
+        }
+        return null;
+    }
+
     /** 把一次响应里的 data[].item[] 收进 map（按 jx0408id+classTime+classWeekDetails 去重） */
     private static int collectItems(String body, java.util.LinkedHashMap<String, org.json.JSONObject> out) {
         if (body == null || body.isEmpty() || body.startsWith("__ERR__")) return 0;
@@ -1206,24 +1240,27 @@ public class EduLoginActivity extends Activity {
                 } catch (Exception ignored) {
                 }
 
-                // 接口一次只返回“当前周”的课（data[0].week=nowWeek），
-                // 所以按周补拉，合并成整学期 —— 否则别的周就会缺课。
+                // 接口一次只返回“当前周”的课（data[0].week=nowWeek），别的周就缺课。
+                // 服务器不认死的参数名，先探一探哪个参数能让它返回别的周，再按周拉全。
                 String body = EduHttp.postH5(
                         base + "/student/curriculum?xnxq01id=&kbjcmsid=" + kbjcmsid, token);
 
                 java.util.LinkedHashMap<String, org.json.JSONObject> merged =
                         new java.util.LinkedHashMap<>();
-                int baseCount = collectItems(body, merged);
+                collectItems(body, merged);
+                String weekParam = probeWeekParam(base, kbjcmsid, token, body);
                 int diffWeeks = 0;
-                for (int w = 1; w <= 20; w++) {
-                    String one = "";
-                    try {
-                        one = EduHttp.postH5(base + "/student/curriculum?xnxq01id=&kbjcmsid="
-                                + kbjcmsid + "&week=" + w, token);
-                    } catch (Exception ignored) { }
-                    int before = merged.size();
-                    collectItems(one, merged);
-                    if (merged.size() > before) diffWeeks++;
+                if (weekParam != null) {
+                    for (int w = 1; w <= 20; w++) {
+                        String one = "";
+                        try {
+                            one = EduHttp.postH5(base + "/student/curriculum?xnxq01id=&kbjcmsid="
+                                    + kbjcmsid + weekParam + w, token);
+                        } catch (Exception ignored) { }
+                        int before = merged.size();
+                        collectItems(one, merged);
+                        if (merged.size() > before) diffWeeks++;
+                    }
                 }
                 if (diffWeeks > 0 && !merged.isEmpty()) {
                     try {
