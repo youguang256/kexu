@@ -3769,14 +3769,9 @@
     var nowWeek = 0;
     try { nowWeek = Number((n && n.takeEduNowWeek && n.takeEduNowWeek()) || 0); } catch (e) { nowWeek = 0; }
     if (nowWeek > 0) {
-      list.forEach(function (c) {
-        (c.sessions || []).forEach(function (ss) {
-          if (Array.isArray(ss.weeks) && ss.weeks.length) {
-            ss.weeks = ss.weeks.map(function (w) { return w + 1; });
-          }
-        });
-      });
-      // 本周 = nowWeek + 1 → 第 1 周的周一 = 本周周一 − nowWeek 周
+      // 周次按接口原值，不做偏移：netlog 证明「参数全空那次」返回的就是整学期数据，
+      // 页面切周只是前端按 classWeekDetails 过滤。
+      // 只把学期起点对齐到接口的 nowWeek，让「当前周」和页面一致。
       var d = new Date();
       d.setHours(0, 0, 0, 0);
       d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - nowWeek * 7);
