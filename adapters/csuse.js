@@ -171,54 +171,123 @@
     return String(s || '').split(new RegExp('[\r\n]+'))[0].replace(/\s+/g, ' ').trim();
   }
 
+  /**
+   * 把表格还原成「行/列」二维网格。
+   * 教务的课表有 rowspan（连堂课占两行）和 colspan，
+   * 直接按 row.cells 下标当星期几会整体错位 —— 这正是漏课、串列的原因。
+   */
+  function buildGrid(table) {
+    var rows = table.rows || [];
+    var span = {};        // 列 -> 还需占用的行数
+    var grid = [];
+
+    for (var r = 0; r < rows.length; r++) {
+      var line = {};
+      // ① 先把上一行 rowspan 延伸下来的位置占住
+      Object.keys(span).forEach(function (c) {
+        if (span[c] > 0) { line[c] = 'SPAN'; span[c]--; }
+      });
+      // ② 再把本行的单元格放进空位
+      var cells = rows[r].cells || [];
+      var ci = 0;
+      for (var i = 0; i < cells.length; i++) {
+        var cell = cells[i];
+        while (line[ci] !== undefined) ci++;
+        var cs = Math.max(1, cell.colSpan || 1);
+        var rs = Math.max(1, cell.rowSpan || 1);
+        for (var k = 0; k < cs; k++) {
+          line[ci + k] = cell;
+          if (rs > 1) span[ci + k] = rs - 1;
+        }
+        ci += cs;
+      }
+      grid.push(line);
+    }
+    return grid;
+  }
+
+  /** 表头行里「星期一」在绝对第几列 */
+  function weekdayCols(grid) {
+    for (var r = 0; r < grid.length; r++) {
+      var line = grid[r];
+      var cols = {}, hit = 0;
+      Object.keys(line).forEach(function (c) {
+        var t = txt(line[c]);
+        var m = /(?:星期|周)\s*([一二三四五六日天])/.exec(t);
+        if (!m) return;
+        var n = '一二三四五六'.indexOf(m[1]) + 1;
+        if (m[1] === '日' || m[1] === '天') n = 7;
+        if (n >= 1 && n <= 7) { cols[n] = Number(c); hit++; }
+      });
+      if (hit >= 3) return { row: r, cols: cols };
+    }
+    return null;
+  }
+
   /** 把整张表读成拾光契约的课程数组 */
   function collect() {
     var table = findTable();
     if (!table) return null;
 
-    var rows = table.rows || [];
-    var headerIdx = -1;
-    for (var r = 0; r < rows.length; r++) {
-      if (/星期/.test(txt(rows[r]))) { headerIdx = r; break; }
-    }
-    if (headerIdx < 0) return null;
+    var grid = buildGrid(table);
+    var hdr = weekdayCols(grid);
+    if (!hdr) return null;
 
     var map = {};
-    var seq = 0;
-    var diag = { cells: 0, entries: 0, noWeeks: 0 };
+    var diag = { cells: 0, entries: 0, noWeeks: 0, days: Object.keys(hdr.cols).length };
 
-    for (var ri = headerIdx + 1; ri < rows.length; ri++) {
-      var row = rows[ri];
-      var cells = row.cells || [];
-      if (cells.length < 3) continue;                 // 备注行只有 2 格
-      var label = txt(cells[0]);
+    for (var ri = hdr.row + 1; ri < grid.length; ri++) {
+      var line = grid[ri];
+      if (!line) continue;
+
+      // 本行的大节序号：第一列（可能是上面 rowspan 下来的，那就沿用上一行的）
+      var label = '';
+      var firstKey = Object.keys(line).map(Number).sort(function (a, b) { return a - b; })[0];
+      if (firstKey !== undefined) label = txt(line[firstKey]);
       if (/备注|说明/.test(label)) break;
 
-      var big = bigIndexOf(label) || (++seq);
-      seq = big;
+      var big = bigIndexOf(label);
 
-      for (var ci = 1; ci < cells.length && ci <= 7; ci++) {
-        var weekday = ci;                             // 第 1 列=星期一
-        if (txt(cells[ci])) diag.cells++;
-        var entries = entriesOfCell(cells[ci]);
+      for (var wd = 1; wd <= 7; wd++) {
+        var col = hdr.cols[wd];
+        if (col === undefined) continue;
+        var cell = line[col];
+        if (!cell || cell === 'SPAN') continue;
+        var cellText = txt(cell);
+        if (!cellText) continue;
+        diag.cells++;
+
+        // 大节序号：本行没写就从这个格子的 rowspan 反推（连堂课占了几行就用第几行）
+        var useBig = big;
+        if (!useBig) {
+          var guess = 0;
+          for (var rr = ri; rr >= hdr.row + 1; rr--) {
+            var l0 = grid[rr];
+            var k0 = Object.keys(l0).map(Number).sort(function (a, b) { return a - b; })[0];
+            var gb = bigIndexOf(txt(l0[k0]));
+            if (gb) { guess = gb + (ri - rr); break; }
+          }
+          useBig = guess || 1;
+        }
+
+        var entries = entriesOfCell(cell);
         diag.entries += entries.length;
         for (var ei = 0; ei < entries.length; ei++) {
           var e = entries[ei];
           var d = parseDetail(e.detail);
-
-          var startSection = d.startSection || (big * 2 - 1);
-          var endSection = d.endSection || (big * 2);
-          // 以前这里直接把「没解析出周次」的整条丢掉，导致漏课；
-          // 现在保留，空周次在 App 里等于「每周都有」
+          var startSection = d.startSection || (useBig * 2 - 1);
+          var endSection = d.endSection || (useBig * 2);
+          var rowSpanAcross = Math.max(1, cell.rowSpan || 1);
+          if (!d.startSection && rowSpanAcross > 1) endSection = startSection + rowSpanAcross * 2 - 1;
           if (!d.weeks.length) diag.noWeeks++;
 
-          var key = [e.name, d.teacher, weekday, startSection, endSection, d.location].join('|');
+          var key = [e.name, d.teacher, wd, startSection, endSection, d.location].join('|');
           if (!map[key]) {
             map[key] = {
               name: e.name,
               teacher: d.teacher || '未知',
               position: d.location || '待定',
-              day: weekday,
+              day: wd,
               startSection: startSection,
               endSection: endSection,
               weeks: []
