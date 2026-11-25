@@ -72,8 +72,11 @@
   /** "3,6-17周" / "1-16周(单)" / "2-5,8,10-17" → [3,6,7,...,17] */
   function parseWeeks(raw) {
     var s = String(raw || '')
+      .replace(/周次|上课周|时间/g, '')
       .replace(/第/g, '')
       .replace(/周/g, '')
+      .replace(/至/g, '-')
+      .replace(/[～〜]/g, '~')
       .replace(/[（]/g, '(')
       .replace(/[）]/g, ')');
 
@@ -145,16 +148,27 @@
   /** 一个 td 里可能有多门课（多个 li） */
   function entriesOfCell(cell) {
     var out = [];
+    // 优先标准结构，取不到再退到任意 li，最后退到整个单元格文本
     var items = cell.querySelectorAll('li.courselists-item');
+    if (!items.length) items = cell.querySelectorAll('li');
     for (var i = 0; i < items.length; i++) {
       var li = items[i];
-      var nameEl = li.querySelector('.qz-hasCourse-title');
-      var abbrEl = li.querySelector('.qz-hasCourse-abbrinfo');
-      var name = txt(nameEl) || txt(li.querySelector('.kbcontent1'));
+      var nameEl = li.querySelector('.qz-hasCourse-title, .kbcontent1, .title, [class*="title"]');
+      var abbrEl = li.querySelector('.qz-hasCourse-abbrinfo, .kbcontent, [class*="abbr"]');
+      var name = txt(nameEl) || txt(li);
       if (!name) continue;
-      out.push({ name: name, detail: txt(abbrEl) });
+      out.push({ name: firstLine(name), detail: txt(abbrEl) || name });
+    }
+    if (!out.length) {
+      var whole = txt(cell);
+      if (whole) out.push({ name: firstLine(whole), detail: whole });
     }
     return out;
+  }
+
+  /** 名称只取第一行，避免把整段详情当成课名 */
+  function firstLine(s) {
+    return String(s || '').split(new RegExp('[\r\n]+'))[0].replace(/\s+/g, ' ').trim();
   }
 
   /** 把整张表读成拾光契约的课程数组 */
@@ -171,6 +185,7 @@
 
     var map = {};
     var seq = 0;
+    var diag = { cells: 0, entries: 0, noWeeks: 0 };
 
     for (var ri = headerIdx + 1; ri < rows.length; ri++) {
       var row = rows[ri];
@@ -184,14 +199,18 @@
 
       for (var ci = 1; ci < cells.length && ci <= 7; ci++) {
         var weekday = ci;                             // 第 1 列=星期一
+        if (txt(cells[ci])) diag.cells++;
         var entries = entriesOfCell(cells[ci]);
+        diag.entries += entries.length;
         for (var ei = 0; ei < entries.length; ei++) {
           var e = entries[ei];
           var d = parseDetail(e.detail);
 
           var startSection = d.startSection || (big * 2 - 1);
           var endSection = d.endSection || (big * 2);
-          if (!d.weeks.length) continue;              // 没有周次的不进课表（原本就是备注/空占位）
+          // 以前这里直接把「没解析出周次」的整条丢掉，导致漏课；
+          // 现在保留，空周次在 App 里等于「每周都有」
+          if (!d.weeks.length) diag.noWeeks++;
 
           var key = [e.name, d.teacher, weekday, startSection, endSection, d.location].join('|');
           if (!map[key]) {
@@ -216,6 +235,7 @@
     out.sort(function (a, b) {
       return a.day - b.day || a.startSection - b.startSection || a.name.localeCompare(b.name);
     });
+    collect.diag = diag;
     return out;
   }
 
@@ -258,7 +278,9 @@
       cfg.semesterTotalWeeks = totalWeeksOf(courses);
     }
 
-    B.showToast('解析到 ' + courses.length + ' 条课程安排，正在写入…');
+    var dg = collect.diag || {};
+    B.showToast('解析到 ' + courses.length + ' 条（有课格子 ' + (dg.cells || 0) +
+      ' / 条目 ' + (dg.entries || 0) + ' / 无周次 ' + (dg.noWeeks || 0) + '），正在写入…');
 
     BP.saveImportedCourses(JSON.stringify(courses))
       .then(function () { return BP.saveCourseConfig(JSON.stringify(cfg)); })
