@@ -1,4 +1,4 @@
-/* 课表助手 CoursePilot —— 手机端主逻辑（无框架、无依赖、可离线） */
+/* 课序 KeXu —— 手机端主逻辑（无框架、无依赖、可离线） */
 (function () {
   'use strict';
 
@@ -1512,7 +1512,7 @@
       '</div>';
 
     html += '<div class="small muted" style="margin-top:18px;line-height:1.9">' +
-      '课表助手 ' + (window.CP_VERSION ? 'v' + window.CP_VERSION : '开发版') + ' · 数据只存在这台手机<br>装到桌面：浏览器菜单 → 添加到主屏幕</div>';
+      '课序 ' + (window.CP_VERSION ? 'v' + window.CP_VERSION : '开发版') + ' · 数据只存在这台手机<br>装到桌面：浏览器菜单 → 添加到主屏幕</div>';
 
     main.innerHTML = html;
   }
@@ -1628,7 +1628,7 @@
       '<rect x="7" y="11" width="34" height="26" rx="4" fill="none" stroke="currentColor" stroke-width="2.6"/>' +
       '<path d="M7 19h34M17 19v18M27 19v18M7 27h34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
       '</svg></div>' +
-      '<div class="more-name">课表助手</div>' +
+      '<div class="more-name">课序</div>' +
       '<div class="more-ver">' + ver + ' · 长沙科技学院</div>' +
       '</div>';
 

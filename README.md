@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="app/icons/icon-192.png" width="88" alt="课表助手">
+<img src="app/icons/icon-192.png" width="88" alt="课序">
 
-# 课表助手 · CoursePilot
+# 课序 · KeXu
 
 长沙科技学院的课表 App：课表、待办、学习通、成绩都在一个应用里，数据只存在本机。
 

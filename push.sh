@@ -5,7 +5,7 @@ set -e
 URL="$1"
 if [ -z "$URL" ]; then
   echo "用法: bash push.sh <仓库地址>"
-  echo "例:   bash push.sh https://github.com/youguang256/coursepilot.git"
+  echo "例:   bash push.sh https://github.com/youguang256/kexu.git"
   exit 1
 fi
 git branch -M main

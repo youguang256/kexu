@@ -4,7 +4,7 @@ window.CP_BUILD = {
   // 形如 https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxxxxx
   wecomWebhook: '',
   // 推送里的署名
-  appName: '课表助手',
+  appName: '课序',
 
   // 下载最新版：把 GitHub 仓库写成 "用户名/仓库名"，就能自动比对版本
   // 例：updateRepo: 'cskjxy2026/coursepilot'
