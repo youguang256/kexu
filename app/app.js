@@ -2237,6 +2237,9 @@
         : '<button class="btn primary block" data-act="edu-login">登录教务系统</button>' +
           '<div class="small muted" style="margin:8px 0 14px">默认是企业微信扫码页：点「存二维码」→ 企业微信扫一扫 → 相册选图；不行就切「密码」</div>') +
       '<button class="btn block" data-act="pick-file">选择文件</button>' +
+      '<button class="btn block" data-act="pick-edu-json" style="margin-top:10px">导入教务原始数据（.json）</button>' +
+      '<div class="small muted" style="margin:8px 0 14px">手机里 <b>Download/CoursePilot/netlog.json</b> 或教务接口的返回值，选中即可，一次拿到整学期</div>' +
+      '<input type="file" id="edu-json-file" accept=".json,application/json" style="display:none">' +
       '<div class="form-row" style="margin-top:14px"><label>或者直接粘贴内容</label>' +
       '<textarea id="paste-area" placeholder="把课表表格 / ics 内容粘进来"></textarea></div>' +
       '<button class="btn block" data-act="parse-paste">解析粘贴内容</button>');
@@ -3168,6 +3171,51 @@
       return;
     }
     if (act === 'pick-file') { pickFile('timetable', '.ics,.csv,.txt,.html,.htm,.json,text/*'); return; }
+    if (act === 'import-done') { closeSheet(); render(); return; }
+    if (act === 'pick-edu-json') {
+      var inp = document.getElementById('edu-json-file');
+      if (!inp) { toast('没找到文件入口'); return; }
+      inp.value = '';
+      inp.onchange = function () {
+        var f = inp.files && inp.files[0];
+        if (!f) return;
+        toast('正在读 ' + f.name + '…', 3000);
+        var fr = new FileReader();
+        fr.onload = function () {
+          var res;
+          try { res = parseEduJson(String(fr.result)); }
+          catch (e) { toast('这个文件读不出课表：' + e.message, 5000); return; }
+          if (!res.rows.length) {
+            openSheet('这个文件里没有课表',
+              '<div class="small muted" style="line-height:1.9">没找到带 classTime 的响应。<br>' +
+              '要选的是 <b>Download/CoursePilot/netlog.json</b>，或者在教务页面里点过课表之后存下来的接口返回值。</div>' +
+              '<button class="btn block" data-act="import-open" style="margin-top:14px">再选一次</button>');
+            return;
+          }
+          if (res.periods && res.periods.length >= 2) {
+            state.settings.periods = res.periods.map(function (p2, i) {
+              return { no: Number(p2.no) || (i + 1), start: p2.start, end: p2.end };
+            });
+          }
+          if (res.nowWeek) {
+            var d0 = new Date();
+            d0.setHours(0, 0, 0, 0);
+            d0.setDate(d0.getDate() - ((d0.getDay() + 6) % 7) - (res.nowWeek - 1) * 7);
+            state.settings.termStart = d0.getFullYear() + '-' + String(d0.getMonth() + 1).padStart(2, '0') + '-' + String(d0.getDate()).padStart(2, '0');
+            state.settings.termStartSet = true;
+            if (!state.settings.totalWeeks || state.settings.totalWeeks < 18) state.settings.totalWeeks = 20;
+          }
+          var n2 = importEduRows(res.rows);
+          S.save();
+          render();
+          showImportReport(res.rows);
+          toast('已导入 ' + n2 + ' 门课', 4000);
+        };
+        fr.readAsText(f);
+      };
+      inp.click();
+      return;
+    }
     if (act === 'parse-paste') {
       var ta = document.getElementById('paste-area');
       var text = ta ? ta.value : '';
@@ -3807,6 +3855,85 @@
     return importEduRows(rows);
   }
 
+  /**
+   * 教务原始数据 → 课程行。三种形状都认：
+   *   ① netlog.json（[{u,t,s}] 数组，逐条找含 classTime 的响应）
+   *   ② curriculum 接口原样（{data:[{item:[]}]}）
+   *   ③ 已经摊平的 {courses:[...]}
+   * 周次用 classWeekDetails 原值，不做偏移。
+   */
+  function parseEduJson(text) {
+    var json = typeof text === 'string' ? JSON.parse(text) : text;
+    var bodies = [];
+    if (Array.isArray(json)) {
+      json.forEach(function (e) {
+        var t = e && (e.t || e.body || e.response);
+        if (typeof t === 'string' && t.indexOf('classTime') >= 0) {
+          try { bodies.push(JSON.parse(t)); } catch (err) {}
+        }
+      });
+    } else if (json && json.data) {
+      bodies.push(json);
+    }
+    var rows = [], seen = {}, periods = null, nowWeek = 0;
+    bodies.forEach(function (b) {
+      if (!nowWeek && b.nowWeek) nowWeek = Number(b.nowWeek) || 0;
+      if (!periods && Array.isArray(b.jcdatalist) && b.jcdatalist.length) periods = b.jcdatalist;
+      (Array.isArray(b.data) ? b.data : []).forEach(function (g) {
+        (g.item || []).forEach(function (it) {
+          var ct = String(it.classTime || '').padStart(5, '0');
+          var wd = Number(ct.slice(0, 1));
+          var s1 = Number(ct.slice(1, 3));
+          var s2 = Number(ct.slice(3, 5)) || s1;
+          if (!wd || !s1) return;
+          var weeks = String(it.classWeekDetails || it.classWeek || '')
+            .split(',').map(function (x) { return parseInt(x, 10); })
+            .filter(function (x) { return x > 0 && x < 30; });
+          weeks = weeks.filter(function (v, i, a) { return a.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
+          if (!weeks.length) weeks = [1];
+          var row = {
+            name: it.courseName || it.kcmc || '未命名课程',
+            teacher: it.teacherName || it.xm || '',
+            location: it.location || it.cdmc || '',
+            weekday: wd,
+            startPeriod: Math.ceil(s1 / 2),
+            endPeriod: Math.ceil(s2 / 2),
+            weeks: weeks
+          };
+          var sig = row.name + '|' + row.weekday + '|' + row.startPeriod + '|' + row.endPeriod + '|' + weeks.join(',');
+          if (seen[sig]) return;
+          seen[sig] = 1;
+          rows.push(row);
+        });
+      });
+    });
+    return { rows: rows, periods: periods, nowWeek: nowWeek };
+  }
+
+  /** 导入结果面板：门课数 + 覆盖周次 + 每周节数，一眼看出到底拿到了什么 */
+  function showImportReport(rows) {
+    if (!rows.length) return;
+    var byWeek = {};
+    rows.forEach(function (r) {
+      (r.weeks || []).forEach(function (w) { byWeek[w] = (byWeek[w] || 0) + 1; });
+    });
+    var ws = Object.keys(byWeek).map(Number).sort(function (a, b) { return a - b; });
+    var names = {};
+    rows.forEach(function (r) { names[r.name] = 1; });
+    var lines = ws.map(function (w) {
+      var n = byWeek[w];
+      return '<div class="rowline"><span>第 ' + w + ' 周</span><span class="muted">' + n + ' 节</span></div>';
+    }).join('');
+    openSheet('导入结果',
+      '<div class="small" style="line-height:2;margin-bottom:10px">' +
+      '<b>' + Object.keys(names).length + '</b> 门课 · <b>' + rows.length + '</b> 个时段 · 覆盖第 <b>' +
+      ws[0] + '–' + ws[ws.length - 1] + '</b> 周</div>' +
+      '<div class="imp-report">' + lines + '</div>' +
+      '<button class="btn primary block" data-act="import-done" style="margin-top:14px">知道了</button>');
+  }
+  window.__cpParseEduJson = parseEduJson;
+  window.__cpShowImportReport = showImportReport;
+
   window.onEduLoginChanged = function () {
     var n = nativeBridge();
     busyStep(2);
@@ -3826,10 +3953,15 @@
       var pack = n.takeEduImport();
       if (pack) {
         try {
-          var got = applyEduImport(JSON.parse(pack));
+          var payload = JSON.parse(pack);
+          var got = applyEduImport(payload);
           if (got) {
             busyStep(3); busyLog('解析完成，共 ' + got + ' 门课'); toast('已导入 ' + got + ' 门课', 4000);
-            busyTimer = setTimeout(busyClose, 600); return;
+            busyTimer = setTimeout(function () {
+              busyClose();
+              showImportReport(Array.isArray(payload.courses) ? payload.courses : []);
+            }, 600);
+            return;
           }
         } catch (e) { /* 落到兼容路径 */ }
       }

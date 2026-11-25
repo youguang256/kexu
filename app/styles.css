@@ -1659,3 +1659,8 @@ html.glass-light .mrow { color: var(--ink-on-light); }
 .lr-name { font-size: 14px; color: var(--text); }
 .lr-use { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 .lr-lic { font-size: 11.5px; color: var(--text-dim); white-space: nowrap; }
+
+/* 导入结果：每周节数清单 */
+.imp-report { max-height: 46vh; overflow: auto; border-radius: 14px; background: color-mix(in srgb, currentColor 7%, transparent); padding: 6px 12px; }
+.imp-report .rowline { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; font-size: 14px; border-bottom: 1px solid var(--line); }
+.imp-report .rowline:last-child { border-bottom: 0; }
