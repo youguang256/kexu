@@ -1,0 +1,29 @@
+# 构建产物
+android/app/build/
+android/build/
+android/.gradle/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# 本机环境
+local.properties
+.idea/
+*.iml
+.gradle/
+
+# 依赖与缓存
+node_modules/
+_thumbs/
+.DS_Store
+
+# 本工程自己的临时物（不一定对别人有用）
+secrets/
+data/
+_fx/
+server.log
+*.log
+
+# build-apk.sh 会重新生成，不提交
+android/app/src/main/assets/

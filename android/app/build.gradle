@@ -1,0 +1,41 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.coursepilot.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.coursepilot.app"
+        minSdk 26
+        targetSdk 34
+        versionCode 120
+        versionName "0.6.92"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled false
+            // 用 debug 签名便于直接安装；正式发布请换成自己的 keystore
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+    implementation 'androidx.core:core:1.13.1'
+}

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 只暴露 App 私有目录里的铃声文件，供通知通道以 content:// 方式读取 -->
+<paths>
+    <files-path name="ringtone" path="ringtone/" />
+</paths>
