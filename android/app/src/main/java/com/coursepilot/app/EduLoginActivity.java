@@ -753,7 +753,9 @@ public class EduLoginActivity extends Activity {
             public void run() {
                 if (web == null) return;
                 web.evaluateJavascript(
-                        "(function(){try{return JSON.stringify({r:(window.__cpResult||'').slice(0,60000),u:window.__cpResultUrl||''})}catch(e){return ''}})()",
+                        "(function(){try{var r=window.__cpResult||'';"
+                        + "var b='';try{b=btoa(unescape(encodeURIComponent(r)))}catch(e){b=''}"
+                        + "return JSON.stringify({b:b,u:window.__cpResultUrl||''})}catch(e){return ''}})()",
                         value -> {
                             String raw = value == null ? "" : value;
                             if (raw.startsWith("\"") && raw.endsWith("\"") && raw.length() > 1) {
@@ -762,7 +764,15 @@ public class EduLoginActivity extends Activity {
                             raw = raw.replace("\\\"", "\"");
                             try {
                                 org.json.JSONObject o = new org.json.JSONObject(raw);
-                                String r = o.optString("r");
+                                String b64 = o.optString("b");
+                                String r = "";
+                                if (!b64.isEmpty()) {
+                                    try {
+                                        byte[] dec = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                                        r = new String(dec, "UTF-8");
+                                    } catch (Exception e) { r = ""; }
+                                }
+                                if (r.isEmpty()) r = o.optString("r");
                                 String u = o.optString("u");
                                 if (!r.isEmpty()) {
                                     // 先把接口原文落盘：这是唯一能 100% 对上字段的依据
@@ -805,86 +815,70 @@ public class EduLoginActivity extends Activity {
         try {
             org.json.JSONObject root = new org.json.JSONObject(raw);
             org.json.JSONArray data = root.optJSONArray("data");
-
-            java.util.List<org.json.JSONObject> items = new java.util.ArrayList<>();
-            java.util.List<Integer> fallbackDays = new java.util.ArrayList<>();
-
-            if (data != null) {
-                for (int d = 0; d < data.length(); d++) {
-                    org.json.JSONObject day = data.optJSONObject(d);
-                    if (day == null) continue;
-                    int dayWd = weekdayOf(day.optString("weekday", ""));
-                    org.json.JSONArray arr = day.optJSONArray("courses");
-                    if (arr == null) arr = day.optJSONArray("item");
-                    if (arr == null) continue;
-                    for (int i = 0; i < arr.length(); i++) {
-                        org.json.JSONObject it = arr.optJSONObject(i);
-                        if (it == null) continue;
-                        items.add(it);
-                        fallbackDays.add(dayWd);
-                    }
-                }
-            }
-            if (items.isEmpty()) return 0;
+            if (data == null) return 0;
 
             org.json.JSONArray out = new org.json.JSONArray();
-            for (int i = 0; i < items.size(); i++) {
-                org.json.JSONObject c = items.get(i);
-                String name = pick(c, "courseName", "kcmc", "name", "title").trim();
-                if (name.isEmpty()) continue;
 
-                // 真实字段：classTime = "星期(1位)+起始小节(2位)+结束小节(2位)"，如 "10102" = 周一第01-02小节
-                //           classWeek = "3,6-17" 周次
-                int wd = 0, sp = 0, ep = 0;
-                String ct = c.optString("classTime", "");
-                if (ct != null && ct.replaceAll("[^0-9]", "").length() >= 5) {
-                    String digits = ct.replaceAll("[^0-9]", "");
-                    wd = intOf(digits.substring(0, 1));
-                    sp = intOf(digits.substring(1, 3));
-                    ep = intOf(digits.substring(3, 5));
-                }
-                if (wd == 0) {
-                    // 退回 weekNoteDetail: "101,102" → 第一位是星期
-                    String wnd = c.optString("weekNoteDetail", "");
-                    if (!wnd.isEmpty()) {
-                        String digits2 = wnd.split(",")[0].replaceAll("[^0-9]", "");
-                        if (digits2.length() >= 3) wd = intOf(digits2.substring(0, 1));
+            for (int d = 0; d < data.length(); d++) {
+                org.json.JSONObject day = data.optJSONObject(d);
+                if (day == null) continue;
+
+                // 真实结构：data[].item[]（老写法 courses[] 也认）
+                org.json.JSONArray items = day.optJSONArray("item");
+                if (items == null) items = day.optJSONArray("courses");
+                if (items == null) continue;
+
+                int dayWd = weekdayOf(day.optString("weekday", ""));
+
+                for (int i = 0; i < items.length(); i++) {
+                    org.json.JSONObject it = items.optJSONObject(i);
+                    if (it == null) continue;
+
+                    String name = pick(it, "courseName", "kcmc", "name", "title").trim();
+                    if (name.isEmpty()) continue;
+
+                    // classTime = 星期(1位) + 起节(2位) + 止节(2位)，如 "10102" = 周一 01-02 小节
+                    int wd = 0, sp = 0, ep = 0;
+                    String ct = it.optString("classTime", "").replaceAll("[^0-9]", "");
+                    if (ct.length() >= 5) {
+                        wd = intOf(ct.substring(0, 1));
+                        sp = intOf(ct.substring(1, 3));
+                        ep = intOf(ct.substring(3, 5));
                     }
+                    if (wd == 0) wd = dayWd;
+                    if (wd < 1 || wd > 7) wd = 1;
+                    if (sp <= 0) {
+                        int[] pe = periodsOf(it);
+                        sp = pe[0];
+                        ep = pe[1];
+                    }
+                    if (sp <= 0) sp = 1;
+                    if (ep < sp) ep = sp;
+
+                    // 小节 → 大节：01-02→1、03-04→2、05-06→3、07-08→4、09-10→5
+                    sp = (sp + 1) / 2;
+                    ep = (ep + 1) / 2;
+                    if (ep < sp) ep = sp;
+                    if (ep > 5) ep = 5;
+
+                    // 周次优先用 classWeekDetails（",3,6,7,..."），退 classWeek / kkzc
+                    String weekSpec = it.optString("classWeekDetails", "");
+                    if (weekSpec == null || weekSpec.replaceAll("[^0-9]", "").isEmpty()) {
+                        weekSpec = pick(it, "classWeek", "kkzc", "zc", "zcd");
+                    }
+
+                    org.json.JSONObject one = new org.json.JSONObject();
+                    one.put("name", name);
+                    one.put("teacher", pick(it, "teacherName", "skjs", "jsmc"));
+                    one.put("location", pick(it, "classroomName", "location", "skdd", "cdmc"));
+                    one.put("weekday", wd);
+                    one.put("startPeriod", sp);
+                    one.put("endPeriod", ep);
+                    one.put("weeks", parseWeeks(weekSpec));
+                    out.put(one);
                 }
-                if (wd == 0) {
-                    String wdRaw = pick(c, "weekDay", "weekday", "xqid", "xq");
-                    if (!wdRaw.isEmpty()) wd = weekdayOf(wdRaw);
-                }
-                if (wd == 0) wd = fallbackDays.get(i);
-                if (wd < 1 || wd > 7) wd = 1;
-
-                if (sp == 0) {
-                    int[] pe = periodsOf(c);
-                    sp = pe[0];
-                    ep = pe[1];
-                }
-                if (sp <= 0) sp = 1;
-                if (ep < sp) ep = sp;
-
-                // 小节 → 大节：01-02→1、03-04→2、05-06→3、07-08→4、09-10→5
-                sp = (sp + 1) / 2;
-                ep = (ep + 1) / 2;
-                if (ep < sp) ep = sp;
-                if (ep > 5) ep = 5;
-
-                // 周次：classWeek "3,6-17"；没有就用 kkzc
-                String weekSpec = pick(c, "classWeek", "kkzc", "zc", "zcd");
-
-                org.json.JSONObject one = new org.json.JSONObject();
-                one.put("name", name);
-                one.put("teacher", pick(c, "teacherName", "skjs", "jsmc"));
-                one.put("location", pick(c, "classroomName", "skdd", "cdmc", "location"));
-                one.put("weekday", wd);
-                one.put("startPeriod", sp);
-                one.put("endPeriod", ep);
-                one.put("weeks", parseWeeks(weekSpec));
-                out.put(one);
             }
+
             if (out.length() == 0) return 0;
 
             getSharedPreferences("coursepilot", MODE_PRIVATE).edit()

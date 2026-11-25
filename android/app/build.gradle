@@ -10,8 +10,8 @@ android {
         applicationId "com.coursepilot.app"
         minSdk 26
         targetSdk 34
-        versionCode 136
-        versionName "0.7.08"
+        versionCode 137
+        versionName "0.7.09"
     }
 
     compileOptions {
