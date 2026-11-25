@@ -238,8 +238,9 @@ public class EduLoginActivity extends Activity {
                     setStatus("已登录，正在抓课表…");
                     injectNetHook();
                     // 先切到 H5 站点直接用它的接口，拿不到再退回页面解析
-                    handler.postDelayed(new Runnable() { public void run() { jumpToH5ThenGrab(); } }, 800);
-                    handler.postDelayed(new Runnable() { public void run() { driveToTimetable(); } }, 2500);
+                    handler.postDelayed(new Runnable() { public void run() { driveToTimetable(); } }, 1500);
+                    handler.postDelayed(new Runnable() { public void run() { jumpToH5ThenGrab(); } }, 9000);
+                    handler.postDelayed(new Runnable() { public void run() { grabFromDom(); } }, 16000);
                     handler.postDelayed(new Runnable() {
                         public void run() {
                             if (finished) return;
@@ -343,8 +344,9 @@ public class EduLoginActivity extends Activity {
                             hooksStarted = true;
                             setStatus("已登录，正在抓课表…");
                             injectNetHook();
-                            handler.postDelayed(new Runnable() { public void run() { jumpToH5ThenGrab(); } }, 800);
-                            handler.postDelayed(new Runnable() { public void run() { driveToTimetable(); } }, 2500);
+                            handler.postDelayed(new Runnable() { public void run() { driveToTimetable(); } }, 1500);
+                            handler.postDelayed(new Runnable() { public void run() { jumpToH5ThenGrab(); } }, 9000);
+                            handler.postDelayed(new Runnable() { public void run() { grabFromDom(); } }, 16000);
                         } else if (!stillLogin) {
                             // 停在门户首页（SPA 不触发 onPageFinished）时也主动点一次入口
                             if (href.indexOf("ps.csuse.edu.cn") >= 0 && !entryClicked && href.indexOf("/login") < 0) {
@@ -669,8 +671,15 @@ public class EduLoginActivity extends Activity {
      *  停在 jw.csuse.edu.cn 上是读不到的 —— 这是「接口抓到 0 条」的根因。 */
     private void jumpToH5ThenGrab() {
         if (h5Jumped) return;
-        h5Jumped = true;
         if (web == null) return;
+        // 没有教务会话就直接跳过去只会看到登录页，等门户把 SSO 交出来再说
+        boolean has = false;
+        try { has = EduCookies.loggedIn(this); } catch (Exception ignored) { }
+        if (!has) {
+            handler.postDelayed(new Runnable() { public void run() { jumpToH5ThenGrab(); } }, 2000);
+            return;
+        }
+        h5Jumped = true;
         setStatus("正在读取教务接口…");
         web.loadUrl("https://jwh5.csuse.edu.cn/njwhd");
         handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 4000);
