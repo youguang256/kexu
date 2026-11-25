@@ -461,11 +461,11 @@ public class EduLoginActivity extends Activity {
     }
 
     private void showFetchOverlay(String sub) {
+        // 不再显示任何遮罩/浮条：抓取时页面必须完全可点（用户要自己切周次）
         runOnUiThread(new Runnable() {
             public void run() {
                 try {
                     if (fetchSub != null && sub != null) fetchSub.setText(sub);
-                    if (fetchOverlay != null) fetchOverlay.setVisibility(View.VISIBLE);
                 } catch (Exception ignored) { }
             }
         });
