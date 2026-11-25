@@ -87,6 +87,26 @@ server.mjs        网页版本地代理
 tools/            静态检查（按钮配对、资源版本号）
 ```
 
+## 让「下载最新版本」真正可用
+
+更多页里那一行默认只会提示「还没配置下载地址」。两种接法，改 `app/build-config.js`：
+
+```js
+window.CP_BUILD = {
+  // 方式一：填 GitHub 仓库，自动对比版本
+  updateRepo: '你的用户名/仓库名',
+  // 方式二：只给一个下载页地址
+  downloadUrl: 'https://github.com/你的用户名/仓库名/releases/latest'
+};
+```
+
+- 填了 `updateRepo`：点这一行会请求 `api.github.com/repos/<repo>/releases/latest`，
+  比 tag 里的版本号，有新版就显示「去下载 X.Y.Z」并打开 Releases 页
+- 只填 `downloadUrl`：直接打开那个地址
+- 两个都没有：面板里会写明怎么配
+
+发布新版只需要在 GitHub 建一个 Release、把 APK 传上去，App 内这一行就会自动看到。
+
 ## 隐私
 
 - 不做统计上报，不接第三方 SDK，不请求账号
