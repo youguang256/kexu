@@ -1416,27 +1416,16 @@ public class EduLoginActivity extends Activity {
                 } catch (Exception ignored) { }
                 if (weeks.isEmpty()) for (int w = 1; w <= 20; w++) weeks.add(w);
 
-                String body = EduHttp.postH5(
-                        base + "/student/curriculum?xnxq01id=" + term + "&kbjcmsid=" + kbjcmsid, token);
+                // 三次抓包一致：参数**全空**才返回整学期（带 classWeekDetails 的那 10 条），
+                // 一旦填上 xnxq01id/kbjcmsid/week，后端就只当「查某一周」，没课就回空数组。
+                // 所以固定用全空参数请求，一次拿全，本地再按周展开。
+                String body = EduHttp.postH5(base + "/student/curriculum?xnxq01id=&kbjcmsid=&week=", token);
 
                 java.util.LinkedHashMap<String, org.json.JSONObject> merged =
                         new java.util.LinkedHashMap<>();
+                // 不再逐周补拉：实测 week=N 一律返回「当前周次未查询到课表！」，白跑 30 次
                 collectItems(body, merged);
-                int diffWeeks = 0;
-                final StringBuilder log = new StringBuilder();
-                for (int wi = 0; wi < weeks.size() && wi < 30; wi++) {
-                    int w = weeks.get(wi);
-                    String one = "";
-                    try {
-                        one = EduHttp.postH5(base + "/student/curriculum?xnxq01id=" + term
-                                + "&kbjcmsid=" + kbjcmsid + "&week=" + w, token);
-                    } catch (Exception ignored) { }
-                    int before = merged.size();
-                    int added = collectItems(one, merged);
-                    if (added > 0) diffWeeks++;
-                    log.append("w").append(w).append(":+").append(added).append(" ");
-                }
-                dumpRaw("weeks-log.txt", log.toString());
+                dumpRaw("weeks-log.txt", "single-request: " + merged.size() + " 条");
                 if (body == null || body.startsWith("__ERR__")) {
                     setStatus("课表抓取失败：" + String.valueOf(body));
                     curGrab = false;
@@ -1453,7 +1442,7 @@ public class EduLoginActivity extends Activity {
                     EduCookies.saveAll(EduLoginActivity.this);
                     runOnUiThread(new Runnable() {
                         public void run() {
-                            toast("已抓取 " + cnt + " 条课程，顺手抓成绩…");
+                            toast("整学期课表已导入：" + cnt + " 门课，顺手抓成绩…");
                         }
                     });
                     // 同一个会话里直接打开成绩页（H5 的 #/student/semester_Score），

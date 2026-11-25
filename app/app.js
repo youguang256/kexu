@@ -3811,8 +3811,8 @@
     });
     var list = Object.keys(courses).map(function (k) { return courses[k]; });
     if (!list.length) return 0;
-    // 教务 H5 的周次比教务网页显示的少 1（接口 nowWeek=12 时网页是第 13 周），
-    // 用 nowWeek 把学期起点对齐到教务口径，课程周次同步 +1
+    // 接口的 nowWeek 就是「这周是第几周」，用它把学期起点倒推出来；
+    // 课程周次不再加减，直接用 classWeekDetails 的原值。
     var n = nativeBridge();
     var nowWeek = 0;
     try { nowWeek = Number((n && n.takeEduNowWeek && n.takeEduNowWeek()) || 0); } catch (e) { nowWeek = 0; }
@@ -3822,7 +3822,7 @@
       // 只把学期起点对齐到接口的 nowWeek，让「当前周」和页面一致。
       var d = new Date();
       d.setHours(0, 0, 0, 0);
-      d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - nowWeek * 7);
+      d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - (nowWeek - 1) * 7);
       state.settings.termStart = d.getFullYear() + '-' +
         String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
       state.settings.termStartSet = true;
