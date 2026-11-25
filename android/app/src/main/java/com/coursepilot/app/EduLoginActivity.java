@@ -250,7 +250,7 @@ public class EduLoginActivity extends Activity {
                                     + "接口抓到: " + (apiCount < 0 ? "未执行" : apiCount + " 条") + NL()
                                     + "屏幕抓到: " + (domCount < 0 ? "未执行" : domCount + " 条") + NL()
                                     + NL() + "如果接口是 0，说明解析没对上字段；把这段发我。";
-                            showDialog("本次抓取结果", msg);
+                            setStatus("抓取结束（要看细节点右上「诊断」）");
                         }
                     }, 18000);
                 }
@@ -784,7 +784,8 @@ public class EduLoginActivity extends Activity {
                                         finish();
                                         return;
                                     }
-                                    showDialog("课表接口返回（没解析出来）",
+                                    setStatus("接口没解析出来 · 原文已存 " + (saved == null ? "失败" : saved));
+                                    if (false) showDialog("课表接口返回（没解析出来）",
                                         u + NL() + NL()
                                         + "原文已存：" + (saved == null ? "落盘失败" : saved) + NL() + NL()
                                         + "把上面这个 json 文件发我，我按真实字段改。" + NL() + NL()
@@ -1283,7 +1284,7 @@ public class EduLoginActivity extends Activity {
                 }
 
                 if (body == null || body.startsWith("__ERR__")) {
-                    showDialog("课表抓取失败", String.valueOf(body));
+                    setStatus("课表抓取失败：" + String.valueOf(body));
                     curGrab = false;
                     return;
                 }
@@ -1313,7 +1314,7 @@ public class EduLoginActivity extends Activity {
                 }
 
                 String prev = body.length() > 1500 ? body.substring(0, 1500) + "…" : body;
-                showDialog("课表原文（未解析）", "kbjcmsid=" + kbjcmsid + NL() + NL() + prev);
+                setStatus("课表原文未解析，已落盘（点「诊断」可看）");
                 curGrab = false;
             }
         }).start();
