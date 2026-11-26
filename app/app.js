@@ -980,7 +980,7 @@
   }
 
   function cxTidyCourses(list) {
-    var wl = (state.courses || []).map(function (c) { return cxNormName(c.name); }).filter(Boolean);
+    var hidden = (state.settings.cxHidden || []).map(cxNormName);
     return list.map(function (c) {
       var hasTask = (Number(c.taskTotal) || 0) > 0 || (Number(c.undoneChapters) || 0) > 0;
       var pend = Number(c.workPending) || 0;
@@ -995,11 +995,11 @@
         progress: pr, noWork: noWork
       };
     }).filter(function (c) {
-      if (!wl.length) return true;                       // 没有课表就不筛
       var n = cxNormName(c.name);
       if (!n) return false;
-      var hit = wl.some(function (w) { return w.indexOf(n) >= 0 || n.indexOf(w) >= 0; });
-      return hit || (Number(c.workPending) || 0) > 0;    // 有作业要交的绝不藏
+      // 只按用户自己「隐藏」的选择来筛，绝不拿课表当白名单：
+      // 像军事理论这种课在课表上没有，但确实要交作业，白名单会把它误删。
+      return hidden.indexOf(n) < 0;
     });
   }
 
@@ -1130,8 +1130,11 @@
       });
     }
 
+    var hiddenCnt = (state.settings.cxHidden || []).length;
     if (courses.length) {
-      html += '<div class="sec-title">课程进度</div><div class="card" style="padding:0">';
+      html += '<div class="sec-title">课程进度' +
+        (hiddenCnt ? '<button class="btn sm ghost" data-act="cx-unhide" style="float:right">恢复已隐藏 ' + hiddenCnt + '</button>' : '') +
+        '</div><div class="card" style="padding:0">';
       courses.forEach(function (c) {
         var pr = typeof c.progress === 'number' ? Math.round(c.progress * 100) : null;
         var cls = pr == null ? '' : pr < 60 ? 'low' : pr < 90 ? 'mid' : 'high';
@@ -1150,7 +1153,10 @@
           (c.score != null ? '<span>成绩 ' + c.score + '</span>' : '') +
           (c.noWork ? '<span class="chip ok">无需刷课</span>' : '') +
           '</div></div>' +
+          '<div class="row" style="gap:6px;align-items:center">' +
+          '<button class="cx-hide" data-act="cx-hide" data-name="' + esc(c.name) + '" aria-label="隐藏这门课">隐藏</button>' +
           '<div class="num cx-pct ' + (pr == null ? 'unknown' : cls) + '">' + (pr == null ? '—' : pr + '%') + '</div>' +
+          '</div>' +
           '</div>' +
           (pr == null
             ? '<div class="cx-note">这门课没取到章节进度</div>'
@@ -3319,6 +3325,22 @@
     if (act === 'cx-native-login') {
       var cn = cxNative();
       if (cn) { cn.cxLogin(); toast('登录成功后会自动返回', 4000); }
+      return;
+    }
+    if (act === 'cx-hide') {
+      var nm = (el && el.getAttribute('data-name')) || '';
+      if (!nm) return;
+      var list = state.settings.cxHidden || [];
+      if (list.indexOf(nm) < 0) list.push(nm);
+      state.settings.cxHidden = list;
+      S.save(); render();
+      toast('已隐藏「' + nm + '」，可在课程进度标题旁恢复', 4000);
+      return;
+    }
+    if (act === 'cx-unhide') {
+      state.settings.cxHidden = [];
+      S.save(); render();
+      toast('已恢复隐藏的课程', 3000);
       return;
     }
     if (act === 'cx-native-sync') { cxSyncNative(); return; }
