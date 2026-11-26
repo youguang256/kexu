@@ -3338,7 +3338,7 @@
       return;
     }
     if (act === 'open-more') { subView = 'more'; render(); return; }
-    if (act === 'hdr-more') { tab = 'settings'; subView = 'more'; render(); return; }
+    if (act === 'hdr-more') { checkUpdate(); return; }   // 顶栏提示 → 直接弹「下载最新版」
     if (act === 'close-more') { subView = ''; render(); return; }
     if (act === 'more-update') { checkUpdate(); return; }
     if (act === 'more-check-now') {
