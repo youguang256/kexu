@@ -230,6 +230,7 @@ public class EduLoginActivity extends Activity {
                     if (hooksStarted) return;
                     hooksStarted = true;
                     setStatus("已登录，正在抓课表…");
+                    showFetchOverlay("已登录，正在抓整学期课表…");
                     injectNetHook();
                     // 先切到 H5 站点直接用它的接口，拿不到再退回页面解析
                     handler.postDelayed(new Runnable() { public void run() { driveToTimetable(); } }, 1500);
@@ -387,11 +388,13 @@ public class EduLoginActivity extends Activity {
 
     /** 全屏「正在获取课表」面板：网页在它下面继续运行 */
     private View buildFetchOverlay() {
-        // 只做一个贴底的小条，不要再盖住整页 —— 之前整屏遮罩害得页面点不动
+        // 抓取期间铺满整屏：半透明黑底 + 居中卡片。
+        // 现在抓取是自动的，不需要用户点页面，所以盖住没问题；
+        // 之前关掉是因为要手点周次，那个场景已经不用了。
         FrameLayout wrap = new FrameLayout(this);
-        wrap.setBackgroundColor(Color.TRANSPARENT);
-        wrap.setClickable(false);
-        wrap.setFocusable(false);
+        wrap.setBackgroundColor(Color.parseColor("#CC0b0f16"));
+        wrap.setClickable(true);
+        wrap.setFocusable(true);
         wrap.setVisibility(View.GONE);
 
         LinearLayout card = new LinearLayout(this);
@@ -438,10 +441,9 @@ public class EduLoginActivity extends Activity {
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        lp.gravity = Gravity.CENTER;
         lp.leftMargin = dp(24);
         lp.rightMargin = dp(24);
-        lp.bottomMargin = dp(28);
         wrap.addView(card, lp);
 
         fetchOverlay = wrap;
@@ -453,10 +455,10 @@ public class EduLoginActivity extends Activity {
     }
 
     private void showFetchOverlay(String sub) {
-        // 不再显示任何遮罩/浮条：抓取时页面必须完全可点（用户要自己切周次）
         runOnUiThread(new Runnable() {
             public void run() {
                 try {
+                    if (fetchOverlay != null) fetchOverlay.setVisibility(View.VISIBLE);
                     if (fetchSub != null && sub != null) fetchSub.setText(sub);
                 } catch (Exception ignored) { }
             }
