@@ -4362,7 +4362,7 @@
         '<div class="onb-item"><b>反馈</b><span>遇到 bug、想加课表适配，加下面的 QQ 群或微信说一声</span></div>' +
         '<div class="onb-cards">' +
           '<button class="onb-card wx" data-act="onboard-wechat">' +
-            '<span class="oc-ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M9.2 4C5.2 4 2 6.6 2 9.8c0 1.8 1 3.4 2.6 4.5l-.7 2.1 2.4-1.2c.9.3 1.9.4 2.9.4h.6a5.9 5.9 0 0 1-.2-1.6c0-3.2 3-5.8 6.6-5.8h.5C16 5.9 12.9 4 9.2 4Zm-2.4 3.4a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8Zm4.8 0a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8Z"/><path d="M22 14.1c0-2.6-2.6-4.7-5.8-4.7s-5.8 2.1-5.8 4.7 2.6 4.7 5.8 4.7c.7 0 1.4-.1 2-.3l1.9 1-.5-1.7c1.5-.9 2.4-2.2 2.4-3.7Zm-7.7-1.3a.8.8 0 1 1 0 1.6.8.8 0 0 1 0-1.6Zm3.9 0a.8.8 0 1 1 0 1.6.8.8 0 0 1 0-1.6Z"/></svg></span>' +
+            '<img class="oc-ava" src="./icons/wall-ava.png" alt="校园墙头像" width="34" height="34">' +
             '<span class="oc-main"><span class="oc-t">微信</span><span class="oc-s">cskjxy2026</span></span>' +
             '<span class="oc-go" aria-hidden="true">›</span>' +
           '</button>' +

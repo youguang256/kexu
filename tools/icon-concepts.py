@@ -142,8 +142,54 @@ def v4():
     save(img, 'v4-k.png')
 
 
+
+
+def v5():
+    """参考「课程格子」：白卡上一排错落的三色课块 + 一条深色课块"""
+    n = S * SS
+    img, d = canvas(n, PAPER)
+    m = n * 0.10
+    rounded(d, [m, m, n - m, n - m], int(n * 0.22), INK)
+    # 三条「课程」，宽窄不一、颜色分明，像课表里并排的课
+    x = m + n * 0.10
+    y = m + n * 0.13
+    w = (n - 2 * m) - n * 0.20
+    h = n * 0.115
+    gap = n * 0.052
+    tones = [ACCENT, (247, 248, 250), BLUE, (247, 248, 250)]
+    widths = [1.0, 0.62, 0.82, 0.72]
+    for i in range(4):
+        ww = w * widths[i]
+        rounded(d, [x, y, x + ww, y + h], int(h * 0.34), tones[i])
+        y += h + gap
+    save(img, 'v5-gride.png')
+
+
+def v6():
+    """参考「超级课程表」：一整块亮色底 + 白色课表格，其中一格填深色"""
+    n = S * SS
+    img, d = canvas(n, ACCENT)
+    m = n * 0.17
+    rounded(d, [m, m, n - m, n - m], int(n * 0.10), PAPER)
+    pad = n * 0.055
+    gx, gy = m + pad, m + pad
+    gw = (n - 2 * m) - pad * 2
+    cell = (gw - pad) / 2
+    for r in range(2):
+        for c in range(2):
+            x = gx + c * (cell + pad)
+            y = gy + r * (cell + pad)
+            d.rounded_rectangle([x, y, x + cell, y + cell], radius=int(cell * 0.16),
+                                outline=LINE, width=int(n * 0.011))
+    # 左上角一格填深墨（当前这节课）
+    d.rounded_rectangle([gx, gy, gx + cell, gy + cell], radius=int(cell * 0.16), fill=INK)
+    save(img, 'v6-classic.png')
+
+
 if __name__ == '__main__':
     v1()
     v2()
     v3()
     v4()
+    v5()
+    v6()

@@ -26,7 +26,7 @@ RES = os.path.join(ROOT, 'android/app/src/main/res')
 APP_ICONS = os.path.join(ROOT, 'app/icons')
 DOCS = os.path.join(ROOT, 'docs')
 
-CONCEPTS = {'v1': ic.v1, 'v2': ic.v2, 'v3': ic.v3, 'v4': ic.v4}
+CONCEPTS = {'v1': ic.v1, 'v2': ic.v2, 'v3': ic.v3, 'v4': ic.v4, 'v5': ic.v5, 'v6': ic.v6}
 
 DENSITIES = {
     'mipmap-mdpi': 48,

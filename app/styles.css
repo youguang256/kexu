@@ -1754,6 +1754,15 @@ html.glass-light .mrow { color: var(--ink-on-light); }
   color: var(--on-brand);
 }
 .onb-card.wx .oc-ico { background: var(--brand-wechat); }
+/* 微信那张用校园墙自己的头像 */
+.onb-card .oc-ava {
+  width: 34px; height: 34px; flex: 0 0 auto;
+  border-radius: 11px;
+  object-fit: cover;            /* 用裁好的中心图案，34px 下也认得出 */
+  background: #fff;             /* 印章本身是白底，垫白才不会在深色主题下发灰 */
+  padding: 0;
+  box-sizing: border-box;
+}
 .onb-card.qq .oc-ico { background: var(--brand-qq); }
 .onb-card .oc-main { display: flex; flex-direction: column; min-width: 0; }
 .onb-card .oc-t { font-size: 13px; font-weight: 600; }
