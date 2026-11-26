@@ -222,6 +222,7 @@
   /* ───────────── 版本检查（顶栏提示用）───────────── */
 
   var updLatest = '';          // GitHub 上最新的版本号，空 = 没查到 / 已是最新
+  var updChecked = false;      // 查过一次没有（用于「更多」里显示状态）
 
   function verNum(v) {
     var m = String(v || '').match(/(\d+)\.(\d+)\.(\d+)/);
@@ -251,27 +252,36 @@
     } catch (e) { }
 
     var save = function (latest) {
+      updChecked = true;
       try { localStorage.setItem('cp-upd', JSON.stringify({ at: Date.now(), latest: latest || '' })); } catch (e) { }
       apply(latest);
+      if (subView === 'more') render();
     };
 
-    fetch('https://api.github.com/repos/' + repo + '/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+    // 先读仓库根目录的 VERSION 纯文本：轻、不限流、国内也能通
+    // 读不到再退回 GitHub API（releases/latest → tags）
+    fetch('https://raw.githubusercontent.com/' + repo + '/main/VERSION?t=' + Date.now())
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (txt) {
+        var v = String(txt || '').trim();
+        if (v && /\d+\.\d+/.test(v)) { save(v); return; }
+        return fetch('https://api.github.com/repos/' + repo + '/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) {
-        if (j && j.tag_name) return save(j.tag_name);
-        // 没有 release 就退回看 tag
-        return fetch('https://api.github.com/repos/' + repo + '/tags', { headers: { Accept: 'application/vnd.github+json' } })
-          .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (arr) {
-            if (Array.isArray(arr) && arr.length) {
-              var best = arr.map(function (x) { return x.name; })
-                .sort(function (a, b) { return verNum(b) - verNum(a); })[0];
-              return save(best);
-            }
-            save('');
+          .then(function (j) {
+            if (j && j.tag_name) return save(j.tag_name);
+            return fetch('https://api.github.com/repos/' + repo + '/tags', { headers: { Accept: 'application/vnd.github+json' } })
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (arr) {
+                if (Array.isArray(arr) && arr.length) {
+                  var best = arr.map(function (x) { return x.name; })
+                    .sort(function (a, b) { return verNum(b) - verNum(a); })[0];
+                  return save(best);
+                }
+                save('');
+              });
           });
       })
-      .catch(function () { /* 没网就算了，不打扰 */ });
+      .catch(function () { updChecked = true; });
   }
 
   /** 设置里可以再进一层（更多 / 关于这类页） */
@@ -1786,6 +1796,11 @@
       '</div>' +
       '<div class="more-name">课序</div>' +
       '<div class="more-ver">' + ver + ' · 长沙科技学院</div>' +
+      '<div class="more-ver-status" data-act="more-check-now">' +
+        (updLatest
+          ? 'GitHub 已有 ' + esc(updLatest) + '，点这里看怎么更新'
+          : (updChecked ? '已是最新版本' : '正在检查新版本…')) +
+      '</div>' +
       '</div>';
 
     /* 功能列表 */
@@ -3314,6 +3329,13 @@
     if (act === 'hdr-more') { tab = 'settings'; subView = 'more'; render(); return; }
     if (act === 'close-more') { subView = ''; render(); return; }
     if (act === 'more-update') { checkUpdate(); return; }
+    if (act === 'more-check-now') {
+      updChecked = false;
+      try { localStorage.removeItem('cp-upd'); } catch (e) { }
+      toast('正在检查新版本…', 2500);
+      refreshUpdateBadge();
+      return;
+    }
     if (act === 'more-lang') {
       openSheet('语言设置', '<div class="seg" style="width:100%">' +
         ['zh-CN', 'zh-TW', 'en'].map(function (l) {
