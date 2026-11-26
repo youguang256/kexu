@@ -694,7 +694,22 @@ public class NativeBridge {
 
     /* ───────── 下载最新版 / 外部链接 ───────── */
 
-    /** 用系统浏览器打开链接：查更新、下载 APK、开仓库都走它 */
+    /** 复制到剪贴板：微信没有「打开某个个人号主页」的协议，只能复制号去搜索 */
+    @JavascriptInterface
+    public void copyText(final String text) {
+        if (text == null || text.isEmpty()) return;
+        act.runOnUiThread(new Runnable() {
+            @Override public void run() {
+                try {
+                    android.content.ClipboardManager cm =
+                            (android.content.ClipboardManager) act.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                    if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("课序", text));
+                } catch (Exception ignored) { }
+            }
+        });
+    }
+
+    /** 用系统浏览器 / 其它 App 打开链接：查更新、下载 APK、打开微信都走它 */
     @JavascriptInterface
     public void openExternal(final String url) {
         if (url == null || url.isEmpty()) return;

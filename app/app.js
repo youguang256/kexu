@@ -3312,7 +3312,12 @@
       return;
     }
     if (act === 'onboard-wechat') {
-      openExternalUrl('weixin://');
+      // 微信没有「直接打开某个个人号主页」的协议（企业微信/公众号才有），
+      // 所以这里做能做的事：把号复制到剪贴板 + 打开微信，让人过去粘贴搜索。
+      var wx = 'cskjxy2026';
+      var n0 = (window.Native && typeof window.Native.copyText === 'function') ? window.Native : null;
+      if (n0) { try { n0.copyText(wx); } catch (e) {} }
+      openExternalUrl('weixin://', '微信号 ' + wx + ' 已复制，去微信「添加朋友」粘贴搜索');
       return;
     }
     if (act === 'onboard-qq') {
@@ -4336,13 +4341,13 @@
   var onboardKeepQuiet = false;
 
   /** 打开微信 / 加 QQ 群：原生有 openExternal 就走它，网页版退回当前页跳转 */
-  function openExternalUrl(url) {
+  function openExternalUrl(url, hint) {
     var n = (window.Native && typeof window.Native.openExternal === 'function') ? window.Native : null;
     if (n) {
-      try { n.openExternal(url); return; } catch (e) { /* 落到下面 */ }
+      try { n.openExternal(url); if (hint) toast(hint, 6000); return; } catch (e) { /* 落到下面 */ }
     }
-    try { location.href = url; } catch (e) {
-      toast('没装对应 App？加微信 cskjxy2026 或 QQ 群 1137676166', 6000);
+    try { location.href = url; if (hint) toast(hint, 6000); } catch (e) {
+      toast(hint || '没装对应 App？加微信 cskjxy2026 或 QQ 群 1137676166', 6000);
     }
   }
 
@@ -4372,6 +4377,7 @@
             '<span class="oc-go" aria-hidden="true">›</span>' +
           '</button>' +
         '</div>' +
+        '<div class="onb-tip">微信没有「直接跳个人主页」的接口，点卡片会先把微信号 <b>cskjxy2026</b> 复制好，再去微信「添加朋友」粘贴搜索就行。</div>' +
         '<label class="onb-quiet"><input type="checkbox" id="onb-quiet"> <span>此后不再提醒</span></label>' +
         '<button class="btn primary block" data-act="onboard-close" style="margin-top:12px">开始用</button>' +
       '</div>');
