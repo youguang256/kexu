@@ -22,6 +22,19 @@ public class NativeBridge {
         this.act = a;
     }
 
+    /** 主界面会把 WebView 塞进来，学号登录结束后靠它回调网页 */
+    static android.webkit.WebView host;
+
+    static void emit(String js) {
+        final android.webkit.WebView w = host;
+        if (w == null) return;
+        w.post(new Runnable() {
+            @Override public void run() {
+                w.evaluateJavascript(js, null);
+            }
+        });
+    }
+
     /** 当前该用哪个通道（有自定义铃声就用带指纹的 custom 通道） */
     static String activeChannel(Context c) {
         android.content.SharedPreferences sp = c.getSharedPreferences(PREFS_KEY, Context.MODE_PRIVATE);
@@ -353,6 +366,27 @@ public class NativeBridge {
     }
 
     /** 打开教务登录页（0.6.3 验证过的 H5 接口链路；适配器版本见 AdapterActivity，暂未启用） */
+    /**
+     * 学号登录（免网页）：密码默认就是学号，前端只让用户输学号。
+     * 返回 {"ok":true,"cookie":"..."} 或 {"ok":false,"msg":"...","needChange":bool}
+     * 注意：这是网络请求，必须放在后台线程，别在主线程直接调。
+     */
+    @JavascriptInterface
+    public void eduLoginWith(final String account, final String password) {
+        if (account == null || account.trim().isEmpty()) {
+            emit("window.onEduLoginResult && window.onEduLoginResult(" +
+                    "{\"ok\":false,\"msg\":\"先填学号\"})");
+            return;
+        }
+        final String pwd = (password == null || password.isEmpty()) ? account.trim() : password;
+        new Thread(new Runnable() {
+            @Override public void run() {
+                String out = JsxsdLogin.login(act, account.trim(), pwd);
+                emit("window.onEduLoginResult && window.onEduLoginResult(" + out + ")");
+            }
+        }).start();
+    }
+
     @JavascriptInterface
     public void eduLogin() {
         act.runOnUiThread(new Runnable() {
@@ -659,15 +693,6 @@ public class NativeBridge {
     @JavascriptInterface
     public String httpGetPlain(String url) {
         return EduHttp.request(url, "GET", "", null);
-    }
-
-    /** 教务接口返回的“当前第几周”（H5 的 nowWeek），用来对齐学期起点 */
-    @JavascriptInterface
-    public String takeEduNowWeek() {
-        try {
-            return act.getSharedPreferences("coursepilot", android.content.Context.MODE_PRIVATE)
-                    .getString("eduNowWeek", "");
-        } catch (Exception e) { return ""; }
     }
 
     @JavascriptInterface

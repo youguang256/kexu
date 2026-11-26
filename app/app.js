@@ -3134,6 +3134,19 @@
 
     if (act === 'import-open') { importSheet(); return; }
     if (act === 'edu-login') { eduLogin(); return; }
+    if (act === 'edu-do-login') {
+      var accEl = document.getElementById('edu-acc');
+      var pwdEl = document.getElementById('edu-pwd');
+      var acc = accEl ? accEl.value.trim() : '';
+      var pwd = pwdEl ? pwdEl.value.trim() : '';
+      if (!acc) { toast('先填学号'); return; }
+      closeSheet();
+      busyOpen('正在登录教务', '学号 ' + acc + ' · 密码' + (pwd ? '已填写' : '默认用学号'));
+      busyStep(1);
+      busyLog('正在向教务系统登录…');
+      try { eduNative().eduLoginWith(acc, pwd); } catch (e) { toast('调用失败：' + e.message, 5000); }
+      return;
+    }
     if (act === 'edu-logout') { eduLogout(); return; }
     if (act === 'edu-timetable') { closeSheet(); eduSyncTimetable(); return; }
     if (act === 'edu-jsxsd') {
@@ -3627,7 +3640,60 @@
     try { n.eduLogin(); } catch (e) { busyLog('打开失败：' + e.message); }
   }
 
-  function eduLogin() { eduLoginWithBusy(); }
+  /**
+   * 学号登录：学校这套教务没有微信扫码，密码默认就是学号。
+   * 所以这里只让用户填学号，密码留空 = 用学号；已经改过密码的人填第二格。
+   * 登录在原生后台线程跑，结果通过 window.onEduLoginResult 回来。
+   */
+  function eduLogin() {
+    var n = eduNative();
+    if (!n || typeof n.eduLoginWith !== 'function') {
+      toast('这个版本不支持学号登录，请更新 App', 5000);
+      return;
+    }
+    var last = '';
+    try { last = localStorage.getItem('eduAccount') || ''; } catch (e) {}
+    openSheet('登录教务系统',
+      '<div class="small muted" style="line-height:1.9;margin-bottom:12px">' +
+      '输学号就行——学校默认密码和学号一样。改过密码的，把新密码填在第二格。</div>' +
+      '<div class="form-row"><label>学号</label>' +
+      '<input id="edu-acc" inputmode="numeric" autocomplete="username" placeholder="例如 264150116" value="' + esc(last) + '"></div>' +
+      '<div class="form-row"><label>密码</label>' +
+      '<input id="edu-pwd" type="password" autocomplete="current-password" placeholder="留空 = 和学号一样"></div>' +
+      '<button class="btn primary block" data-act="edu-do-login" style="margin-top:14px">登录并抓取</button>' +
+      '<div class="small muted" style="margin-top:10px">登录成功后自动抓：本学期课表、考试安排、考试成绩</div>');
+  }
+
+  /** 原生登录回调 */
+  window.onEduLoginResult = function (res) {
+    busyLog(res && res.ok ? '登录成功，正在抓课表…' : ('登录失败：' + ((res && res.msg) || '未知')));
+    if (!res || !res.ok) {
+      busyStep(3);
+      busyTimer = setTimeout(busyClose, 1200);
+      if (res && res.needChange) {
+        toast('学校要求先改密码：至少 8 位，含大小写字母、数字和符号。改完再登一次。', 8000);
+      } else {
+        toast('登录失败：' + ((res && res.msg) || '未知错误'), 6000);
+      }
+      render();
+      return;
+    }
+    try { localStorage.setItem('eduAccount', (document.getElementById('edu-acc') || {}).value || ''); } catch (e) {}
+    render();
+    busyLog('已登录，正在拉整学期课表…');
+    eduGrabJsxsd(true).then(function (cnt) {
+      busyLog('课表 ' + cnt + ' 门已导入，接着抓考试和成绩…');
+      return eduSyncExams().catch(function () {}).then(function () {
+        return eduSyncScores(true).catch(function () {});
+      });
+    }).catch(function (e) {
+      busyLog('课表没抓到：' + e.message);
+      toast('课表抓取失败：' + e.message, 6000);
+    }).then(function () {
+      busyStep(3);
+      busyTimer = setTimeout(busyClose, 900);
+    });
+  };
 
   function eduLogout() {
     var n = eduNative();
