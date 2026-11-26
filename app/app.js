@@ -3387,7 +3387,11 @@
     }
     if (act === 'onboard-close') {
       var q = document.getElementById('onb-quiet');
-      if (q && q.checked) { state.settings.onboarded = true; S.save(); }
+      if (q && q.checked) {
+        state.settings.onboarded = true;
+        state.settings.onboardedVer = window.CP_VERSION || '';   // 记下「这个版本看过了」
+        S.save();
+      }
       closeSheet();
       return;
     }
@@ -4412,9 +4416,15 @@
     }
   }
 
-  /** 每次打开都弹，除非上次勾了「此后不再提醒」 */
+  /**
+   * 什么时候弹：
+   *   ① 没勾过「此后不再提醒」→ 每次打开都弹
+   *   ② 勾过了，但这次是装上新版本 → 每个版本弹一次
+   */
   function maybeOnboard() {
-    if (state.settings.onboarded) return;
+    var cur = window.CP_VERSION || '';
+    var seen = state.settings.onboardedVer || '';
+    if (state.settings.onboarded && seen === cur) return;
     setTimeout(function () { onboardingSheet(); }, 350);
   }
 

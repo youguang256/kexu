@@ -11,9 +11,8 @@
   app/icons/icon-192.png / icon-512.png / icon-maskable-512.png
   docs/icon.svg（引用 icon-512.png）
 
-为什么前景要放大 1.34：自适应图标会被启动器裁成圆形/方圆等形状，
-素材自带圆角，放在安全区里会出现「方套方」的双层圆角。
-把素材放大到超出遮罩，多出来的那一圈正好被裁掉，边就干净了。
+前景按 66% 安全区居中：自适应图标会被启动器裁成圆形/方圆，
+超出安全区的内容会被切掉。背景层用同一底色，圆角自然融合。
 """
 import os
 import sys
@@ -32,7 +31,7 @@ DENSITIES = {
     'mipmap-xxxhdpi': 192,
 }
 
-FOREGROUND_SCALE = 1.34
+FOREGROUND_SCALE = 0.66   # 自适应图标的安全区就是 66%，超过就会被启动器裁掉
 
 
 def corner_color(img):
@@ -47,12 +46,16 @@ def hex_of(rgb):
 
 
 def foreground(img, size, scale=FOREGROUND_SCALE):
-    """放大到超出遮罩，让启动器裁掉素材自带的圆角"""
-    n = int(size * scale)
+    """
+    素材缩到安全区（66%）居中放，四周留透明。
+    背景层是同色纯色，所以素材自己的圆角跟背景浑然一体，不会出现「方套方」。
+    之前放大 1.34 是想让遮罩裁掉圆角，结果把内容也裁了 —— 桌面上只剩中间两根条。
+    """
+    n = max(8, int(size * scale))
     art = img.resize((n, n), Image.LANCZOS)
     out = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     off = (size - n) // 2
-    out.alpha_composite(art, (max(0, off), max(0, off))) if off >= 0 else out.paste(art, (off, off), art)
+    out.alpha_composite(art, (off, off))
     return out
 
 
