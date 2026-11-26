@@ -1531,22 +1531,6 @@
 
 
 
-    /* ── 语言 ── */
-    html += '<div class="sec-title">语言</div><div class="card"><div class="seg">' +
-      ['zh-CN', 'zh-TW', 'en'].map(function (l) {
-        var name = { 'zh-CN': '简体', 'zh-TW': '繁體', en: 'EN' }[l];
-        return '<button data-act="lang" data-lang="' + l + '" class="' + (lang === l ? 'on' : '') + '">' + name + '</button>';
-      }).join('') + '</div></div>';
-
-    /* ── 作息 ── */
-    html += '<div class="sec-title">作息时间</div><div class="card"><div class="periods-list">' +
-      '<span></span><span>上课</span><span>下课</span>' +
-      st.periods.map(function (p, i) {
-        return '<span>' + p.no + '</span>' +
-          '<input type="text" inputmode="numeric" data-pi="' + i + '" data-pk="start" value="' + esc(p.start) + '">' +
-          '<input type="text" inputmode="numeric" data-pi="' + i + '" data-pk="end" value="' + esc(p.end) + '">';
-      }).join('') + '</div></div>';
-
     /* ── 数据 ── */
     html += '<div class="sec-title">数据</div><div class="card">' +
       '<button class="btn block" data-act="import-open">导入课表 / 登录教务</button>' +
@@ -3327,6 +3311,20 @@
       if (cn) { cn.cxLogin(); toast('登录成功后会自动返回', 4000); }
       return;
     }
+    if (act === 'onboard-wechat') {
+      openExternalUrl('weixin://');
+      return;
+    }
+    if (act === 'onboard-qq') {
+      openExternalUrl('mqqapi://card/show_pslcard?src_type=internal&version=1&uin=1137676166&card_type=group&source=qrcode');
+      return;
+    }
+    if (act === 'onboard-close') {
+      var q = document.getElementById('onb-quiet');
+      if (q && q.checked) { state.settings.onboarded = true; S.save(); }
+      closeSheet();
+      return;
+    }
     if (act === 'cx-hide') {
       var nm = (el && el.getAttribute('data-name')) || '';
       if (!nm) return;
@@ -4333,6 +4331,52 @@
     try { n.schedule(payload); } catch (e) { /* 失败就只剩应用内提醒 */ }
   }
 
+  /* ───────────── 首次进入的说明弹窗 ───────────── */
+
+  var onboardKeepQuiet = false;
+
+  /** 打开微信 / 加 QQ 群：原生有 openExternal 就走它，网页版退回当前页跳转 */
+  function openExternalUrl(url) {
+    var n = (window.Native && typeof window.Native.openExternal === 'function') ? window.Native : null;
+    if (n) {
+      try { n.openExternal(url); return; } catch (e) { /* 落到下面 */ }
+    }
+    try { location.href = url; } catch (e) {
+      toast('没装对应 App？加微信 cskjxy2026 或 QQ 群 1137676166', 6000);
+    }
+  }
+
+  /** 每次打开都弹，除非上次勾了「此后不再提醒」 */
+  function maybeOnboard() {
+    if (state.settings.onboarded) return;
+    setTimeout(function () { onboardingSheet(); }, 350);
+  }
+
+  function onboardingSheet() {
+    onboardKeepQuiet = false;
+    openSheet('课序怎么用',
+      '<div class="onb">' +
+        '<div class="onb-item"><b>更新</b><span>设置 → 更多 → 检查更新；或到 GitHub Releases 下最新 APK 覆盖安装，数据不会丢</span></div>' +
+        '<div class="onb-item"><b>导入课表</b><span>课表页右上「导入」→ 登录教务（学号即可，密码默认也是学号），登录后自动抓整学期课表、考试、成绩</span></div>' +
+        '<div class="onb-item"><b>学习通</b><span>学习通页 → 登录学习通 → 手机号 + 密码，登录后每小时自动同步进度和作业</span></div>' +
+        '<div class="onb-item"><b>反馈</b><span>遇到 bug、想加课表适配，加下面的 QQ 群或微信说一声</span></div>' +
+        '<div class="onb-cards">' +
+          '<button class="onb-card wx" data-act="onboard-wechat">' +
+            '<span class="oc-ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M9.2 4C5.2 4 2 6.6 2 9.8c0 1.8 1 3.4 2.6 4.5l-.7 2.1 2.4-1.2c.9.3 1.9.4 2.9.4h.6a5.9 5.9 0 0 1-.2-1.6c0-3.2 3-5.8 6.6-5.8h.5C16 5.9 12.9 4 9.2 4Zm-2.4 3.4a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8Zm4.8 0a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8Z"/><path d="M22 14.1c0-2.6-2.6-4.7-5.8-4.7s-5.8 2.1-5.8 4.7 2.6 4.7 5.8 4.7c.7 0 1.4-.1 2-.3l1.9 1-.5-1.7c1.5-.9 2.4-2.2 2.4-3.7Zm-7.7-1.3a.8.8 0 1 1 0 1.6.8.8 0 0 1 0-1.6Zm3.9 0a.8.8 0 1 1 0 1.6.8.8 0 0 1 0-1.6Z"/></svg></span>' +
+            '<span class="oc-main"><span class="oc-t">微信</span><span class="oc-s">cskjxy2026</span></span>' +
+            '<span class="oc-go" aria-hidden="true">›</span>' +
+          '</button>' +
+          '<button class="onb-card qq" data-act="onboard-qq">' +
+            '<span class="oc-ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c3 0 5 2.2 5 5.3 0 1-.1 1.9-.4 2.8 1.3 1.7 2.4 3.7 2.4 5.4 0 1-.5 1.7-1.2 1.7-.6 0-1.1-.5-1.5-1.2-.6 1.4-1.6 2.5-2.7 3.1.6.2 1 .7 1 1.4H9.4c0-.7.4-1.2 1-1.4-1.1-.6-2.1-1.7-2.7-3.1-.4.7-.9 1.2-1.5 1.2-.7 0-1.2-.7-1.2-1.7 0-1.7 1.1-3.7 2.4-5.4-.3-.9-.4-1.8-.4-2.8C7 4.2 9 2 12 2Z"/></svg></span>' +
+            '<span class="oc-main"><span class="oc-t">QQ 群</span><span class="oc-s">1137676166</span></span>' +
+            '<span class="oc-go" aria-hidden="true">›</span>' +
+          '</button>' +
+        '</div>' +
+        '<label class="onb-quiet"><input type="checkbox" id="onb-quiet"> <span>此后不再提醒</span></label>' +
+        '<button class="btn primary block" data-act="onboard-close" style="margin-top:12px">开始用</button>' +
+      '</div>');
+  }
+
   /* ───────────── 启动 ───────────── */
 
   window.__cpRender = render;
@@ -4341,6 +4385,7 @@
 
   startCxAutoSync();
   render();
+  maybeOnboard();
   if (typeof S.demoPurgedCount === 'function' && S.demoPurgedCount() > 0) {
     toast('已清除内置的示例课程 / 待办 / 成绩', 4200);
   }
