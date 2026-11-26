@@ -90,7 +90,6 @@ public final class JsxsdLogin {
             });
 
             HttpURLConnection c = open(BASE + "/Logon.do?method=logon", "POST", jar);
-            c.setInstanceFollowRedirects(false);
             write(c, body);
             int code = c.getResponseCode();
             String loc = c.getHeaderField("Location");
@@ -107,7 +106,7 @@ public final class JsxsdLogin {
             }
 
             String url = loc.startsWith("http") ? loc : BASE + loc;
-            get(url, jar);   // 关键：跟完 LoginToXk，才会下发 bzb_jsxsd
+            get(url, jar);   // 关键：跟完 LoginToXk，才会下发 bzb_jsxsd（现在会逐跳收 cookie）
 
             if (jar.get("bzb_jsxsd") == null) return err("登录了但没拿到教务会话", false);
 
@@ -186,7 +185,7 @@ public final class JsxsdLogin {
         c.setRequestMethod(method);
         c.setConnectTimeout(15000);
         c.setReadTimeout(25000);
-        c.setInstanceFollowRedirects(true);
+        c.setInstanceFollowRedirects(false);   // 自己跟：JDK 自动跟会丢掉中间 302 的 Set-Cookie
         c.setRequestProperty("User-Agent", UA);
         c.setRequestProperty("Accept", "text/html,application/json,*/*");
         c.setRequestProperty("Referer", BASE + "/");
@@ -194,12 +193,27 @@ public final class JsxsdLogin {
         return c;
     }
 
+    /**
+     * GET 并**自己**跟随 302。
+     * 必须自己跟：HttpURLConnection 自动跟随时，getHeaderFields() 只给最后一跳的头，
+     * 中间 302 上的 Set-Cookie（bzb_jsxsd 就在这里下发）会被丢掉 ——
+     * 结果就是「登录成功、课表页却拿到未登录的 24KB 页面」。
+     */
     private static String get(String url, Map<String, String> jar) throws Exception {
-        HttpURLConnection c = open(url, "GET", jar);
-        int code = c.getResponseCode();
-        absorb(c, jar);
-        String body = read(c);
-        return code >= 400 ? "" : body;
+        String cur = url;
+        for (int hop = 0; hop < 6; hop++) {
+            HttpURLConnection c = open(cur, "GET", jar);
+            int code = c.getResponseCode();
+            absorb(c, jar);
+            String loc = c.getHeaderField("Location");
+            if (code >= 300 && code < 400 && loc != null && !loc.isEmpty()) {
+                cur = loc.startsWith("http") ? loc : BASE + loc;
+                continue;
+            }
+            String body = read(c);
+            return code >= 400 ? "" : body;
+        }
+        return "";
     }
 
     private static String post(String url, String body, Map<String, String> jar) throws Exception {
