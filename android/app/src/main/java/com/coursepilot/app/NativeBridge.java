@@ -398,6 +398,12 @@ public class NativeBridge {
         return JsxsdLogin.takeTimetableErr();
     }
 
+    /** 教务认的当前周次（第N周），0 表示没抓到 */
+    @JavascriptInterface
+    public int takeJsxsdWeek() {
+        return JsxsdLogin.takeWeek();
+    }
+
     @JavascriptInterface
     public void eduLogin() {
         act.runOnUiThread(new Runnable() {

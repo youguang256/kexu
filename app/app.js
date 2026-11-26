@@ -3751,7 +3751,23 @@
         var weeks = {};
         courses.forEach(function (c) { (c.sessions || []).forEach(function (s) { (s.weeks || []).forEach(function (w) { weeks[w] = 1; }); }); });
         var ws = Object.keys(weeks).map(Number).sort(function (a, b) { return a - b; });
-        toast('已从旧教务系统导入 ' + courses.length + ' 门课，覆盖第 ' + ws[0] + '–' + ws[ws.length - 1] + ' 周', 6000);
+
+        // 用教务自己认的「第N周」把学期起点倒推出来，别让「当前周」比实际差好几周
+        var wk = 0;
+        try { wk = Number((eduNative().takeJsxsdWeek && eduNative().takeJsxsdWeek()) || 0); } catch (e) { wk = 0; }
+        if (wk > 0) {
+          var d = new Date();
+          d.setHours(0, 0, 0, 0);
+          d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - (wk - 1) * 7);
+          state.settings.termStart = d.getFullYear() + '-' +
+            String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+          state.settings.termStartSet = true;
+          state.settings.totalWeeks = Math.max(Number(state.settings.totalWeeks) || 0, 20);
+          viewWeek = S.currentWeek(state);
+          S.save();
+        }
+        toast('已从旧教务系统导入 ' + courses.length + ' 门课，覆盖第 ' + ws[0] + '–' + ws[ws.length - 1] + ' 周' +
+          (wk > 0 ? '（本周第 ' + wk + ' 周）' : ''), 6000);
         return courses.length;
     }
   }

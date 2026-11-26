@@ -47,6 +47,15 @@ public final class JsxsdLogin {
     static volatile String lastTimetable = "";
     static volatile String lastTimetableErr = "";
 
+    /** 教务自己认的「现在是第几周」，从首页框架的「第N周」抓出来 */
+    static volatile int lastWeek = 0;
+
+    static int takeWeek() {
+        int w = lastWeek;
+        lastWeek = 0;
+        return w;
+    }
+
     static String takeTimetable() {
         String v = lastTimetable;
         lastTimetable = "";
@@ -120,6 +129,13 @@ public final class JsxsdLogin {
             } catch (Exception e) {
                 lastTimetableErr = "取课表页出错：" + e.getMessage();
             }
+
+            // 顺手把「第几周」也抓了：教务首页框架上写着「第12周」，比 App 自己算的准
+            try {
+                String main = get(BASE + "/jsxsd/framework/xsMainV.htmlx", jar);
+                Matcher m = Pattern.compile("第\\s*(\\d{1,2})\\s*周").matcher(main == null ? "" : main);
+                if (m.find()) lastWeek = Integer.parseInt(m.group(1));
+            } catch (Exception ignored) { }
             JSONObject ok = new JSONObject();
             ok.put("ok", true);
             ok.put("cookie", cookie);
