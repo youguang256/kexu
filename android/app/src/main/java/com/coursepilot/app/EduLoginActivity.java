@@ -380,14 +380,13 @@ public class EduLoginActivity extends Activity {
      */
     private void clickEduEntry() {
         if (web == null) return;
+        // 门户页会安排多次调用，这里必须幂等：
+        // 之前第二次就 loadUrl(WECOM_ENTRY)，会把已经扫码成功的用户又踢回二维码页。
+        if (ssoTried) return;
+        ssoTried = true;
+        entryClicked = true;
         setStatus("正在进入教务系统…");
-        if (!ssoTried) {
-            ssoTried = true;
-            web.loadUrl("https://jw.csuse.edu.cn/jsxsd/sso.jsp");
-        } else {
-            // 单点登录没换到教务会话：退回扫码入口重来一次（门户会话还在，通常直接过）
-            web.loadUrl(WECOM_ENTRY);
-        }
+        web.loadUrl("https://jw.csuse.edu.cn/jsxsd/sso.jsp");
     }
 
     private void clickEduEntryLegacy() {
