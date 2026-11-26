@@ -2230,11 +2230,10 @@
       '<div class="small muted" style="line-height:1.9;margin-bottom:12px">' +
       '支持三种：① 手机日历导出的 <b>.ics</b>；② 教务系统复制的表格（直接粘贴 HTML 或表格文本）；③ 自己整理的 <b>.csv</b>（列名：课程,教师,星期,开始节,结束节,周次,地点）。</div>' +
       (eduLoggedIn()
-        ? '<button class="btn primary block" data-act="edu-jsxsd">从旧教务系统拉整学期课表</button>' +
-          '<button class="btn block" data-act="edu-timetable">从教务系统同步课表（新版 H5）</button>' +
+        ? '<button class="btn primary block" data-act="edu-timetable">从教务系统同步课表</button>' +
           '<div class="small muted" style="margin:8px 0 14px">已登录教务系统 · <a href="javascript:void(0)" data-act="edu-logout">退出</a></div>'
         : '<button class="btn primary block" data-act="edu-login">登录教务系统</button>' +
-          '<div class="small muted" style="margin:8px 0 14px">默认是企业微信扫码页：点「存二维码」→ 企业微信扫一扫 → 相册选图；不行就切「密码」</div>') +
+          '<div class="small muted" style="margin:8px 0 14px">点「存二维码」→ 企业微信扫一扫 → 从相册选图，扫完自动回到 App</div>') +
       '<button class="btn block" data-act="pick-file">选择文件</button>' +
       '<div class="form-row" style="margin-top:14px"><label>或者直接粘贴内容</label>' +
       '<textarea id="paste-area" placeholder="把课表表格 / ics 内容粘进来"></textarea></div>' +
@@ -3134,26 +3133,8 @@
 
     if (act === 'import-open') { importSheet(); return; }
     if (act === 'edu-login') { eduLogin(); return; }
-    if (act === 'edu-do-login') {
-      var accEl = document.getElementById('edu-acc');
-      var pwdEl = document.getElementById('edu-pwd');
-      var acc = accEl ? accEl.value.trim() : '';
-      var pwd = pwdEl ? pwdEl.value.trim() : '';
-      if (!acc) { toast('先填学号'); return; }
-      closeSheet();
-      busyOpen('正在登录教务', '学号 ' + acc + ' · 密码' + (pwd ? '已填写' : '默认用学号'));
-      busyStep(1);
-      busyLog('正在向教务系统登录…');
-      try { eduNative().eduLoginWith(acc, pwd); } catch (e) { toast('调用失败：' + e.message, 5000); }
-      return;
-    }
     if (act === 'edu-logout') { eduLogout(); return; }
     if (act === 'edu-timetable') { closeSheet(); eduSyncTimetable(); return; }
-    if (act === 'edu-jsxsd') {
-      closeSheet();
-      eduGrabJsxsd(false).catch(function (e) { toast('拉课表失败：' + e.message, 6000); });
-      return;
-    }
     if (act === 'edu-grades-portal') {
       var ng = window.Native;
       if (ng && typeof ng.openGradeCapture === 'function') {
@@ -3640,60 +3621,7 @@
     try { n.eduLogin(); } catch (e) { busyLog('打开失败：' + e.message); }
   }
 
-  /**
-   * 学号登录：学校这套教务没有微信扫码，密码默认就是学号。
-   * 所以这里只让用户填学号，密码留空 = 用学号；已经改过密码的人填第二格。
-   * 登录在原生后台线程跑，结果通过 window.onEduLoginResult 回来。
-   */
-  function eduLogin() {
-    var n = eduNative();
-    if (!n || typeof n.eduLoginWith !== 'function') {
-      toast('这个版本不支持学号登录，请更新 App', 5000);
-      return;
-    }
-    var last = '';
-    try { last = localStorage.getItem('eduAccount') || ''; } catch (e) {}
-    openSheet('登录教务系统',
-      '<div class="small muted" style="line-height:1.9;margin-bottom:12px">' +
-      '输学号就行——学校默认密码和学号一样。改过密码的，把新密码填在第二格。</div>' +
-      '<div class="form-row"><label>学号</label>' +
-      '<input id="edu-acc" inputmode="numeric" autocomplete="username" placeholder="例如 264150116" value="' + esc(last) + '"></div>' +
-      '<div class="form-row"><label>密码</label>' +
-      '<input id="edu-pwd" type="password" autocomplete="current-password" placeholder="留空 = 和学号一样"></div>' +
-      '<button class="btn primary block" data-act="edu-do-login" style="margin-top:14px">登录并抓取</button>' +
-      '<div class="small muted" style="margin-top:10px">登录成功后自动抓：本学期课表、考试安排、考试成绩</div>');
-  }
-
-  /** 原生登录回调 */
-  window.onEduLoginResult = function (res) {
-    busyLog(res && res.ok ? '登录成功，正在抓课表…' : ('登录失败：' + ((res && res.msg) || '未知')));
-    if (!res || !res.ok) {
-      busyStep(3);
-      busyTimer = setTimeout(busyClose, 1200);
-      if (res && res.needChange) {
-        toast('学校要求先改密码：至少 8 位，含大小写字母、数字和符号。改完再登一次。', 8000);
-      } else {
-        toast('登录失败：' + ((res && res.msg) || '未知错误'), 6000);
-      }
-      render();
-      return;
-    }
-    try { localStorage.setItem('eduAccount', (document.getElementById('edu-acc') || {}).value || ''); } catch (e) {}
-    render();
-    busyLog('已登录，正在拉整学期课表…');
-    eduGrabJsxsd(true).then(function (cnt) {
-      busyLog('课表 ' + cnt + ' 门已导入，接着抓考试和成绩…');
-      return eduSyncExams().catch(function () {}).then(function () {
-        return eduSyncScores(true).catch(function () {});
-      });
-    }).catch(function (e) {
-      busyLog('课表没抓到：' + e.message);
-      toast('课表抓取失败：' + e.message, 6000);
-    }).then(function () {
-      busyStep(3);
-      busyTimer = setTimeout(busyClose, 900);
-    });
-  };
+  function eduLogin() { eduLoginWithBusy(); }
 
   function eduLogout() {
     var n = eduNative();
@@ -3712,64 +3640,6 @@
     var start = t[0] ? date + ' ' + t[0] : date + ' 09:00';
     var end = t[1] ? date + ' ' + t[1] : '';
     return { start: start, end: end };
-  }
-
-  /**
-   * 换个地方抓：旧教务系统 jsxsd 的课表页。
-   * 一次 GET 就是**整学期**：每个格子里写着 "老师:XXX;时间:3,6-17周[1-2节];地点:笃行楼(笃107)"，
-   * 周次是明文，不需要按周请求，也不依赖 H5 那个只给当前周的接口。
-   */
-  function eduGrabJsxsd(quiet) {
-    var n = eduNative();
-    if (!n) return Promise.reject(new Error('网页版没有原生桥'));
-    if (!quiet) toast('正在从旧教务系统取整学期课表…', 6000);
-    // 优先用「登录时顺手抓下来的那一份」：同一个会话，不用再查 Cookie、不会再失败一次
-    var pre = '';
-    try { pre = (n.takeJsxsdTimetable && n.takeJsxsdTimetable()) || ''; } catch (e) { pre = ''; }
-    var preErr = '';
-    try { preErr = (n.takeJsxsdError && n.takeJsxsdError()) || ''; } catch (e) { preErr = ''; }
-    if (pre && pre.indexOf('kbdataUl') >= 0) {
-      return Promise.resolve(parseAndImportJsxsd(pre));
-    }
-    return eduReq('https://jw.csuse.edu.cn/jsxsd/xskb/xskb_list.do?viweType=0', 'GET')
-      .then(function (html) {
-        if (!html || html.indexOf('kbdataUl') < 0) {
-          throw new Error(preErr ? ('课表页没拿到：' + preErr) : '课表页没拿到（会话可能过期）');
-        }
-        return parseAndImportJsxsd(html);
-      });
-  }
-
-  function parseAndImportJsxsd(html) {
-    {
-        var courses = window.JWParser.parseJwTimetable(html, { totalWeeks: 20 });
-        if (!courses.length) throw new Error('课表页解析出的课程是 0 门');
-        applyImport(courses, 'replace');
-        state.settings.lastSyncAt = Date.now();
-        S.save();
-        render();
-        var weeks = {};
-        courses.forEach(function (c) { (c.sessions || []).forEach(function (s) { (s.weeks || []).forEach(function (w) { weeks[w] = 1; }); }); });
-        var ws = Object.keys(weeks).map(Number).sort(function (a, b) { return a - b; });
-
-        // 用教务自己认的「第N周」把学期起点倒推出来，别让「当前周」比实际差好几周
-        var wk = 0;
-        try { wk = Number((eduNative().takeJsxsdWeek && eduNative().takeJsxsdWeek()) || 0); } catch (e) { wk = 0; }
-        if (wk > 0) {
-          var d = new Date();
-          d.setHours(0, 0, 0, 0);
-          d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - (wk - 1) * 7);
-          state.settings.termStart = d.getFullYear() + '-' +
-            String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-          state.settings.termStartSet = true;
-          state.settings.totalWeeks = Math.max(Number(state.settings.totalWeeks) || 0, 20);
-          viewWeek = S.currentWeek(state);
-          S.save();
-        }
-        toast('已从旧教务系统导入 ' + courses.length + ' 门课，覆盖第 ' + ws[0] + '–' + ws[ws.length - 1] + ' 周' +
-          (wk > 0 ? '（本周第 ' + wk + ' 周）' : ''), 6000);
-        return courses.length;
-    }
   }
 
   function eduSyncTimetable() {
@@ -3922,26 +3792,7 @@
   window.onEduLoginChanged = function () {
     var n = nativeBridge();
     busyStep(2);
-    busyLog('教务已返回，先从旧教务系统取整学期课表…');
-
-    // 0.5) 主路径改成旧教务系统 jsxsd：一次拿到整学期，周次是明文
-    if (n && typeof n.eduFetch === 'function' && eduLoggedIn()) {
-      eduGrabJsxsd(true).then(function (cnt) {
-        busyStep(3);
-        busyLog('整学期课表已导入：' + cnt + ' 门课');
-        busyTimer = setTimeout(busyClose, 800);
-      }).catch(function (e) {
-        busyLog('旧教务系统这条路没走通：' + e.message + '，改用页面抓取');
-        legacyImport();
-      });
-      return;
-    }
-    legacyImport();
-  };
-
-  function legacyImport() {
-    var n = nativeBridge();
-    busyStep(2);
+    busyLog('教务已返回，正在解析课表…');
 
     // 0) 刚从「抓成绩」页回来：只有成绩、没有课表
     var gpack0 = (n && typeof n.takeEduGrades === 'function') ? n.takeEduGrades() : '';
