@@ -3824,7 +3824,12 @@
       });
     }).catch(function (e) {
       busyLog('课表没抓到：' + e.message);
-      toast('课表抓取失败：' + e.message, 6000);
+      var m = String(e.message || '');
+      if (/未登录|没有该域名/.test(m)) {
+        toast('扫码后没拿到教务会话：到「导入」里点「从旧教务系统拉整学期课表」重试，或重新扫码一次', 8000);
+      } else {
+        toast('课表抓取失败：' + m, 6000);
+      }
     }).then(function () {
       busyStep(3);
       busyTimer = setTimeout(busyClose, 900);

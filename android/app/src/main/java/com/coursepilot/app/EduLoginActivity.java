@@ -61,6 +61,8 @@ public class EduLoginActivity extends Activity {
     private boolean modeQr = true;
     private boolean desktopTried = false;
     private boolean entryClicked = false;
+    /** 门户 SSO 直达教务：点磁贴走的是 window.open，WebView 不接管就等于没点 */
+    private boolean ssoTried = false;
     private volatile boolean checking = false;
 
     /** 只抓成绩模式：从登录页进去，拿到 H5 会话后自动跳成绩页 */
@@ -356,7 +358,20 @@ public class EduLoginActivity extends Activity {
         }, 1500);
     }
 
+    /**
+     * 进教务系统：直接打开门户的单点登录地址。
+     * 以前是在门户页里点「教务系统」磁贴，但那个磁贴用的是 window.open，
+     * WebView 没配 onCreateWindow 就等于点了没反应 —— 拿不到 jw 会话，
+     * 后面 eduFetch 自然报「未登录（没有该域名的会话）」。
+     */
     private void clickEduEntry() {
+        if (web == null || ssoTried) return;
+        ssoTried = true;
+        setStatus("正在进入教务系统…");
+        web.loadUrl("https://jw.csuse.edu.cn/jsxsd/sso.jsp");
+    }
+
+    private void clickEduEntryLegacy() {
         if (web == null) return;
         entryAttempts++;
         String js = "(function(){try{"
