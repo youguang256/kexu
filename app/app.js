@@ -3830,24 +3830,19 @@
     if (!quiet) toast('正在查成绩…', 6000);
     // 成绩页是 layui 表格，接口要带全表单字段（少一个后端就回空）
     // 字段来自 /jsxsd/kscj/cjcx_frm 的搜索表单：kksj kcxz kcsx kcmc xsfs sfxsbcxq fxkcmc zxsbjg
-    var body = 'kksj=&kcxz=&kcsx=&kcmc=&xsfs=all&sfxsbcxq=&fxkcmc=&zxsbjg=&page=1&limit=200';
-    var url = EDU_BASE + '/jsxsd/kscj/cjcx_list';
-    var size1 = 0, size2 = 0;
-    return eduReq(url, 'POST', body)
+    // 真实请求（从成绩页 cjcx_frm 点「查询」抓到的）：
+    //   GET /jsxsd/kscj/cjcx_list?pageNum=1&pageSize=20&kksj=&kcxz=&kcsx=&kcmc=&xsfs=all&sfxsbcxq=1
+    // 注意是 pageNum/pageSize，不是 page/limit；sfxsbcxq 必须 =1，少一个就返回 0 字节。
+    var q = 'pageNum=1&pageSize=200&kksj=&kcxz=&kcsx=&kcmc=&xsfs=all&sfxsbcxq=1';
+    var url = EDU_BASE + '/jsxsd/kscj/cjcx_list?' + q;
+    return eduReq(url, 'GET')
       .then(function (raw) {
-        size1 = (raw || '').length;
         var rows = parseScoresAny(raw);
-        if (rows.length) return rows;
-        // POST 拿不到就换 GET 再试一次（有些部署只认其中一种）
-        return eduReq(url + '?' + body, 'GET').then(function (raw2) {
-          size2 = (raw2 || '').length;
-          return parseScoresAny(raw2);
-        });
+        return rows;
       })
       .then(function (rows) {
         if (!rows || !rows.length) {
-          // 把两次返回的字节数说出来：0 字节 = 接口没给数据，有字节 = 格式没认出来
-          if (!quiet) toast('没查到成绩（接口返回 ' + size1 + ' / ' + size2 + ' 字节）', 8000);
+          if (!quiet) toast('没查到成绩（可能这学期还没出分）', 6000);
           return;
         }
         var before = state.grades.length;
@@ -3879,22 +3874,46 @@
 
   function eduSyncExams() {
     toast('正在查考试安排…', 6000);
-    return eduReq(EDU_BASE + '/jsxsd/xsks/xsksap_list', 'POST', 'xnxqid=&xqlb=&page=1&limit=200')
-      .then(function (html) {
-        var rows = window.JWParser.parseExams(html);
+    // 真实请求：GET /jsxsd/xsks/xsksap_list?pageNum=1&pageSize=20&xnxqid=<学期>&xqlb=
+    // 返回 {"code":0,"data":[{"kskcmc","kssj":"2026-11-17 14:00~15:40","js_mc","jsxm"}]}
+    var term = '';
+    try { term = (eduNative().takeJsxsdTerm && eduNative().takeJsxsdTerm()) || ''; } catch (e) { term = ''; }
+    if (!term) term = (state.settings.termName || '').replace(/[^\d-]/g, '') || '';
+    var q = 'pageNum=1&pageSize=200&xnxqid=' + encodeURIComponent(term) + '&xqlb=';
+    return eduReq(EDU_BASE + '/jsxsd/xsks/xsksap_list?' + q, 'GET')
+      .then(function (raw) {
+        var rows = [];
+        var t = String(raw || '').trim();
+        if (t.charAt(0) === '{' || t.charAt(0) === '[') {
+          var j = {};
+          try { j = JSON.parse(t); } catch (e) { j = {}; }
+          rows = (Array.isArray(j) ? j : (j.data || [])).map(function (r) {
+            return {
+              courseName: r.kskcmc || r.kcmc || '',
+              startText: r.kssj || '',
+              location: r.js_mc || '',
+              teacher: r.jsxm || '',
+              note: [r.ksfs, r.ksxz].filter(Boolean).join(' · '),
+              title: '考试'
+            };
+          });
+        } else {
+          rows = window.JWParser.parseExams(t);
+        }
         if (!rows.length) { toast('教务系统里还没有考试安排', 5000); return; }
         var added = 0;
         rows.forEach(function (r, i) {
-          var t = parseExamTime(r.startText);
-          if (!t) return;
-          var exists = state.exams.some(function (e) { return e.courseName === r.courseName && e.start === t.start; });
+          var t2 = parseExamTime(r.startText);
+          if (!t2) return;
+          var tt = t2;
+          var exists = state.exams.some(function (e) { return e.courseName === r.courseName && e.start === tt.start; });
           if (exists) return;
           state.exams.push({
             id: 'edu_ex_' + Date.now().toString(36) + i,
             courseName: r.courseName,
             title: r.title || '考试',
-            start: t.start,
-            end: t.end,
+            start: tt.start,
+            end: tt.end,
             location: r.location || '',
             seat: r.seat || '',
             note: [r.teacher && '教师 ' + r.teacher, r.note].filter(Boolean).join(' · ')

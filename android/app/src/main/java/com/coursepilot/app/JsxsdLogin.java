@@ -47,6 +47,15 @@ public final class JsxsdLogin {
     static volatile String lastTimetable = "";
     static volatile String lastTimetableErr = "";
 
+    /** 当前学期 id，如 2026-2027-1（考试接口必须带） */
+    static volatile String lastTerm = "";
+
+    static String takeTerm() {
+        String t = lastTerm;
+        lastTerm = "";
+        return t == null ? "" : t;
+    }
+
     /** 教务自己认的「现在是第几周」，从首页框架的「第N周」抓出来 */
     static volatile int lastWeek = 0;
 

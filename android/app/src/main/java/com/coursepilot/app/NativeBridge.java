@@ -398,6 +398,12 @@ public class NativeBridge {
         return JsxsdLogin.takeTimetableErr();
     }
 
+    /** 当前学期 id（如 2026-2027-1），考试接口要用 */
+    @JavascriptInterface
+    public String takeJsxsdTerm() {
+        return JsxsdLogin.takeTerm();
+    }
+
     /** 教务认的当前周次（第N周），0 表示没抓到 */
     @JavascriptInterface
     public int takeJsxsdWeek() {
