@@ -4367,7 +4367,7 @@
             '<span class="oc-go" aria-hidden="true">›</span>' +
           '</button>' +
           '<button class="onb-card qq" data-act="onboard-qq">' +
-            '<span class="oc-ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c3 0 5 2.2 5 5.3 0 1-.1 1.9-.4 2.8 1.3 1.7 2.4 3.7 2.4 5.4 0 1-.5 1.7-1.2 1.7-.6 0-1.1-.5-1.5-1.2-.6 1.4-1.6 2.5-2.7 3.1.6.2 1 .7 1 1.4H9.4c0-.7.4-1.2 1-1.4-1.1-.6-2.1-1.7-2.7-3.1-.4.7-.9 1.2-1.5 1.2-.7 0-1.2-.7-1.2-1.7 0-1.7 1.1-3.7 2.4-5.4-.3-.9-.4-1.8-.4-2.8C7 4.2 9 2 12 2Z"/></svg></span>' +
+            '<img class="oc-ava" src="./icons/icon-192.png" alt="课序图标" width="34" height="34">' +
             '<span class="oc-main"><span class="oc-t">QQ 群</span><span class="oc-s">1137676166</span></span>' +
             '<span class="oc-go" aria-hidden="true">›</span>' +
           '</button>' +
