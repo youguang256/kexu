@@ -1052,6 +1052,31 @@
   function cxNormName(x) {
     return String(x || '').replace(/[（）()\s·、,，.。:：\-—_]/g, '').toLowerCase();
   }
+
+  function cxTidyCourses(list) {
+    var hidden = (state.settings.cxHidden || []).map(cxNormName);
+    return list.map(function (c) {
+      var hasTask = (Number(c.taskTotal) || 0) > 0 || (Number(c.undoneChapters) || 0) > 0;
+      var pend = Number(c.workPending) || 0;
+      var noWork = !hasTask && pend === 0;
+      var pr = typeof c.progress === 'number' ? c.progress : null;
+      if (noWork) pr = 1;
+      return {
+        name: c.name, teacher: c.teacher, score: c.score,
+        taskDone: c.taskDone, taskTotal: c.taskTotal,
+        undoneChapters: c.undoneChapters,
+        workDone: c.workDone, workTotal: c.workTotal, workPending: c.workPending,
+        progress: pr, noWork: noWork
+      };
+    }).filter(function (c) {
+      var n = cxNormName(c.name);
+      if (!n) return false;
+      // 只按用户自己「隐藏」的选择来筛，绝不拿课表当白名单：
+      // 像军事理论这种课在课表上没有，但确实要交作业，白名单会把它误删。
+      return hidden.indexOf(n) < 0;
+    });
+  }
+
   function renderCx() {
     var cx = state.cx || {};
     var proxy = (state.settings.proxyBase || '').trim();
@@ -1179,8 +1204,8 @@
       });
     }
 
+    var hiddenCnt = (state.settings.cxHidden || []).length;
     if (courses.length) {
-      var hiddenCnt = (state.settings.cxHidden || []).length;
       html += '<div class="sec-title">课程进度' +
         (hiddenCnt ? '<button class="btn sm ghost" data-act="cx-unhide" style="float:right">恢复已隐藏 ' + hiddenCnt + '</button>' : '') +
         '</div><div class="card" style="padding:0">';
