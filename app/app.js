@@ -3805,24 +3805,13 @@
     eduLoginWithBusy();
   }
 
-  /** 原生登录回调 */
-  window.onEduLoginResult = function (res) {
-    busyLog(res && res.ok ? '登录成功，正在抓课表…' : ('登录失败：' + ((res && res.msg) || '未知')));
-    if (!res || !res.ok) {
-      busyStep(3);
-      busyTimer = setTimeout(busyClose, 1200);
-      if (res && res.needChange) {
-        toast('学校要求先改密码：至少 8 位，含大小写字母、数字和符号。改完再登一次。', 8000);
-      } else {
-        toast('登录失败：' + ((res && res.msg) || '未知错误'), 6000);
-      }
-      render();
-      return;
-    }
-    try { localStorage.setItem('eduAccount', (document.getElementById('edu-acc') || {}).value || ''); } catch (e) {}
-    render();
+  /**
+   * 登录成功后统一收尾：先抓整学期课表，接着考试、成绩。
+   * 扫码登录成功后由 onEduLoginChanged 调它；账号密码那套已整体移除。
+   */
+  function afterEduLogin() {
     busyLog('已登录，正在拉整学期课表…');
-    eduGrabJsxsd(true).then(function (cnt) {
+    return eduGrabJsxsd(true).then(function (cnt) {
       busyLog('课表 ' + cnt + ' 门已导入，接着抓考试和成绩…');
       return eduSyncExams().catch(function () {}).then(function () {
         return eduSyncScores(true).catch(function () {});
@@ -3834,7 +3823,7 @@
       busyStep(3);
       busyTimer = setTimeout(busyClose, 900);
     });
-  };
+  }
 
   function eduLogout() {
     var n = eduNative();
@@ -4145,14 +4134,7 @@
 
     // 0.5) 主路径改成旧教务系统 jsxsd：一次拿到整学期，周次是明文
     if (n && typeof n.eduFetch === 'function' && eduLoggedIn()) {
-      eduGrabJsxsd(true).then(function (cnt) {
-        busyStep(3);
-        busyLog('整学期课表已导入：' + cnt + ' 门课');
-        busyTimer = setTimeout(busyClose, 800);
-      }).catch(function (e) {
-        busyLog('旧教务系统这条路没走通：' + e.message + '，改用页面抓取');
-        legacyImport();
-      });
+      afterEduLogin();
       return;
     }
     legacyImport();
