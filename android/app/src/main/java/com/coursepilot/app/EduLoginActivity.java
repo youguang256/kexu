@@ -106,12 +106,6 @@ public class EduLoginActivity extends Activity {
         });
         bar.addView(qrBtn);
 
-        Button pwdBtn = smallBtn("密码");
-        pwdBtn.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { modeQr = false; web.loadUrl(PWD_URL); }
-        });
-        bar.addView(pwdBtn);
-
         Button saveBtn = smallBtn("存二维码");
         saveBtn.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { saveQr(); }
@@ -220,7 +214,7 @@ public class EduLoginActivity extends Activity {
                     if (url.indexOf("/login") >= 0) {
                         // 第一次登录会先落在这里（要填学号密码）。以前这时就把抓取流程跑掉了，
                         // 所以第一次永远抓不到，得退出去再进一次。
-                        setStatus("请先登录（学号/工号 + 密码，或扫码），登录后会自动继续");
+                        setStatus("请用企业微信扫码登录，登录后会自动继续");
                         waitLeavingLogin();
                         return;
                     }
@@ -281,9 +275,7 @@ public class EduLoginActivity extends Activity {
                             "(function(){var i=document.getElementById('userAccount');return i?'login':'ok'})()",
                             value -> {
                                 if (value != null && value.contains("login")) {
-                                    toast("没进到教务：请重扫一次，或点「密码」用学号+初始密码登录");
-                                    modeQr = false;
-                                    autofillUser();
+                                    toast("没进到教务：请点「扫码」重扫一次");
                                 }
                             });
                 }

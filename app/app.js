@@ -2349,7 +2349,7 @@
         ? '<button class="btn primary block" data-act="edu-jsxsd">从旧教务系统拉整学期课表</button>' +
           '<button class="btn block" data-act="edu-timetable">从教务系统同步课表（新版 H5）</button>' +
           '<div class="small muted" style="margin:8px 0 14px">已登录教务系统 · <a href="javascript:void(0)" data-act="edu-logout">退出</a></div>'
-        : '<button class="btn primary block" data-act="edu-login">登录教务系统</button>' +
+        : '<button class="btn primary block" data-act="edu-login">扫码登录教务系统</button>' +
           '<div class="small muted" style="margin:8px 0 14px">默认是企业微信扫码页：点「存二维码」→ 企业微信扫一扫 → 相册选图；不行就切「密码」</div>') +
       '<button class="btn block" data-act="pick-file">选择文件</button>' +
       '<div class="form-row" style="margin-top:14px"><label>或者直接粘贴内容</label>' +
@@ -3255,19 +3255,6 @@
 
     if (act === 'import-open') { importSheet(); return; }
     if (act === 'edu-login') { eduLogin(); return; }
-    if (act === 'edu-do-login') {
-      var accEl = document.getElementById('edu-acc');
-      var pwdEl = document.getElementById('edu-pwd');
-      var acc = accEl ? accEl.value.trim() : '';
-      var pwd = pwdEl ? pwdEl.value.trim() : '';
-      if (!acc) { toast('先填学号'); return; }
-      closeSheet();
-      busyOpen('正在登录教务', '学号 ' + acc + ' · 密码' + (pwd ? '已填写' : '默认用学号'));
-      busyStep(1);
-      busyLog('正在向教务系统登录…');
-      try { eduNative().eduLoginWith(acc, pwd); } catch (e) { toast('调用失败：' + e.message, 5000); }
-      return;
-    }
     if (act === 'edu-logout') { eduLogout(); return; }
     if (act === 'edu-timetable') { closeSheet(); eduSyncTimetable(); return; }
     if (act === 'edu-jsxsd') {
@@ -3811,27 +3798,11 @@
   }
 
   /**
-   * 学号登录：学校这套教务没有微信扫码，密码默认就是学号。
-   * 所以这里只让用户填学号，密码留空 = 用学号；已经改过密码的人填第二格。
-   * 登录在原生后台线程跑，结果通过 window.onEduLoginResult 回来。
+   * 教务登录：只走扫码。学校那套 H5 没有给第三方用的账号密码接口，
+   * 密码登录只在网页里成立，放进 App 反而容易让人以为是自己密码错了。
    */
   function eduLogin() {
-    var n = eduNative();
-    if (!n || typeof n.eduLoginWith !== 'function') {
-      toast('这个版本不支持学号登录，请更新 App', 5000);
-      return;
-    }
-    var last = '';
-    try { last = localStorage.getItem('eduAccount') || ''; } catch (e) {}
-    openSheet('登录教务系统',
-      '<div class="small muted" style="line-height:1.9;margin-bottom:12px">' +
-      '输学号就行——学校默认密码和学号一样。改过密码的，把新密码填在第二格。</div>' +
-      '<div class="form-row"><label>学号</label>' +
-      '<input id="edu-acc" inputmode="numeric" autocomplete="username" placeholder="例如 264150116" value="' + esc(last) + '"></div>' +
-      '<div class="form-row"><label>密码</label>' +
-      '<input id="edu-pwd" type="password" autocomplete="current-password" placeholder="留空 = 和学号一样"></div>' +
-      '<button class="btn primary block" data-act="edu-do-login" style="margin-top:14px">登录并抓取</button>' +
-      '<div class="small muted" style="margin-top:10px">登录成功后自动抓：本学期课表、考试安排、考试成绩</div>');
+    eduLoginWithBusy();
   }
 
   /** 原生登录回调 */
@@ -4466,7 +4437,7 @@
     onboardKeepQuiet = false;
     openSheet('课序怎么用',
       '<div class="onb">' +
-        '<div class="onb-item"><b>导入课表</b><span>课表页右上「导入」→ 登录教务（学号即可，密码默认也是学号），登录后自动抓整学期课表、考试、成绩</span></div>' +
+        '<div class="onb-item"><b>导入课表</b><span>课表页右上「导入」→ 扫码登录教务（企业微信扫一扫），登录后自动抓整学期课表、考试、成绩</span></div>' +
         '<div class="onb-item"><b>学习通</b><span>学习通页 → 登录学习通 → 手机号 + 密码，登录后每小时自动同步进度和作业</span></div>' +
         '<div class="onb-item"><b>反馈</b><span>遇到 bug、想加课表适配，加下面的 QQ 群或微信说一声</span></div>' +
         '<div class="onb-cards">' +
