@@ -245,15 +245,20 @@
       }
     };
 
-    // 先看缓存：6 小时内不重复打 GitHub API
+    // 先看缓存。只缓存「确实有新版」的结果：以前把「没查到」也缓存 6 小时，
+    // 结果仓库刚发版的那段时间里，App 一直认为已是最新，顶栏提示死活不出来。
     try {
       var c = JSON.parse(localStorage.getItem('cp-upd') || '{}');
-      if (c && c.at && Date.now() - c.at < 6 * 3600 * 1000) { apply(c.latest); return; }
+      var fresh = c && c.at && (Date.now() - c.at < 60 * 60 * 1000);
+      if (fresh && c.latest) { apply(c.latest); return; }
     } catch (e) { }
 
     var save = function (latest) {
       updChecked = true;
-      try { localStorage.setItem('cp-upd', JSON.stringify({ at: Date.now(), latest: latest || '' })); } catch (e) { }
+      try {
+        if (latest) localStorage.setItem('cp-upd', JSON.stringify({ at: Date.now(), latest: latest }));
+        else localStorage.removeItem('cp-upd');          // 没有新版就别留缓存
+      } catch (e) { }
       apply(latest);
       if (subView === 'more') render();
     };
@@ -1754,6 +1759,13 @@
     } catch (e) { body = ''; }
 
     var paint = function (latest, note, extra) {
+      // 在这里查到了新版，顶栏的提示也跟着亮起来（两处逻辑合一，不再各说各话）
+      if (latest && verNum(latest) > verNum(cur)) {
+        updLatest = latest;
+        updChecked = true;
+        try { localStorage.setItem('cp-upd', JSON.stringify({ at: Date.now(), latest: latest })); } catch (e) { }
+        renderHeader();
+      }
       openSheetWith(
         '<div class="small muted" style="line-height:1.9">' +
         '当前版本：<b>' + esc(cur || '开发版') + '</b><br>' +
