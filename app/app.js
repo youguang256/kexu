@@ -704,11 +704,13 @@
       '<button class="week-label" data-act="week-pick" style="color:inherit">第 ' + week + ' 周' +
       (isThisWeek ? ' <span class="chip accent">本周</span>' : '') + '</button>' +
       '<button class="nav" data-act="week-next" aria-label="下一周">›</button>' +
+      '<button class="wk-toggle' + (st.settings.showWeekend ? ' on' : '') + '" data-act="toggle-weekend" ' +
+      'aria-pressed="' + (st.settings.showWeekend ? 'true' : 'false') + '" aria-label="显示周末">周末</button>' +
       (isThisWeek ? '' : '<button class="btn sm reset" data-act="week-today">回到本周</button>') +
       '</div>';
 
     var gridRows = periods.map(function () { return 'var(--cell-h)'; }).join(' ');
-    html += '<div class="gscroll" id="gscroll"><div class="grid" style="--days:' + days +
+    html += '<div class="gscroll" id="gscroll"><div class="grid' + (days === 7 ? ' wk7' : '') + '" style="--days:' + days +
       ';--cell-h:' + (ui.cellHeight || 56) + 'px;--blk-r:' + (ui.radius || 8) + 'px;--blk-gap:' + (ui.gap || 1.5) +
       'px;--blk-op:' + (ui.opacity == null ? 1 : ui.opacity) +
       ';grid-template-rows:38px ' + gridRows + '">';
@@ -717,7 +719,7 @@
     for (var d = 1; d <= days; d++) {
       var date = S.dateOfSession(week, d, st);
       var isToday = isThisWeek && d === todayWd;
-      html += '<div class="dhead' + (isToday ? ' today' : '') + '" style="grid-column:' + (d + 1) + ';grid-row:1' +
+      html += '<div class="dhead' + (isToday ? ' today' : '') + (d >= 6 ? ' wkend' : '') + '" style="grid-column:' + (d + 1) + ';grid-row:1' +
         '"><b aria-label="周' + P.WEEKDAY_NAMES[d - 1] + '">' + P.WEEKDAY_NAMES[d - 1] + '</b><span>' +
         (date.getMonth() + 1) + '/' + date.getDate() + '</span></div>';
     }
@@ -728,7 +730,7 @@
       html += '<div class="tcell" style="grid-column:1;grid-row:' + (i + 2) + '"><b>' + p.no +
         '</b><span>' + tShort + '</span></div>';
       for (var dd = 1; dd <= days; dd++) {
-        html += '<div class="cellline" style="grid-column:' + (dd + 1) + ';grid-row:' + (i + 2) + '"></div>';
+        html += '<div class="cellline' + (dd >= 6 ? ' wkend' : '') + '" style="grid-column:' + (dd + 1) + ';grid-row:' + (i + 2) + '"></div>';
       }
     });
 
@@ -3099,6 +3101,11 @@
     if (act === 'week-prev') { if (viewWeek > 1) { viewWeek--; render(); } return; }
     if (act === 'week-next') { if (viewWeek < state.settings.totalWeeks) { viewWeek++; render(); } return; }
     if (act === 'week-today') { viewWeek = S.currentWeek(state); render(); return; }
+    if (act === 'toggle-weekend') {
+      state.settings.showWeekend = !state.settings.showWeekend;
+      S.save(); render();
+      return;
+    }
     if (act === 'course') { courseSheet(el.dataset.id); return; }
     if (act === 'add-todo') { addTodoSheet(); return; }
     if (act === 'add-exam') { addExamSheet(); return; }
@@ -3740,11 +3747,25 @@
       });
   }
 
+  /** 课表里有周六/周日的课就自动把周末显示出来（大二开始周末也有排课） */
+  function autoShowWeekend(courses) {
+    var has = false;
+    (courses || []).forEach(function (c) {
+      (c.sessions || []).forEach(function (s) { if (s.weekday >= 6) has = true; });
+    });
+    if (has && !state.settings.showWeekend) {
+      state.settings.showWeekend = true;
+      S.save();
+    }
+    return has;
+  }
+
   function parseAndImportJsxsd(html) {
     {
         var courses = window.JWParser.parseJwTimetable(html, { totalWeeks: 20 });
         if (!courses.length) throw new Error('课表页解析出的课程是 0 门');
         applyImport(courses, 'replace');
+        autoShowWeekend(courses);
         state.settings.lastSyncAt = Date.now();
         S.save();
         render();
@@ -3978,7 +3999,9 @@
         return { no: Number(p.no) || (i + 1), start: p.start, end: p.end };
       });
     }
-    return importEduRows(rows);
+    var got = importEduRows(rows);
+    autoShowWeekend(rows);
+    return got;
   }
 
   window.onEduLoginChanged = function () {
