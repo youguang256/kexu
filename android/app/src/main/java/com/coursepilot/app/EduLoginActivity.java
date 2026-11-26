@@ -63,6 +63,7 @@ public class EduLoginActivity extends Activity {
     private boolean entryClicked = false;
     /** 门户 SSO 直达教务：点磁贴走的是 window.open，WebView 不接管就等于没点 */
     private boolean ssoTried = false;
+    private int ssoRetries = 0;
     private volatile boolean checking = false;
 
     /** 只抓成绩模式：从登录页进去，拿到 H5 会话后自动跳成绩页 */
@@ -278,7 +279,20 @@ public class EduLoginActivity extends Activity {
                             "(function(){var i=document.getElementById('userAccount');return i?'login':'ok'})()",
                             value -> {
                                 if (value != null && value.contains("login")) {
-                                    toast("没进到教务：请点「扫码」重扫一次");
+                                    if (ssoRetries < 2) {
+                                        ssoRetries++;
+                                        setStatus("换教务会话中…（第 " + ssoRetries + " 次）");
+                                        handler.postDelayed(new Runnable() {
+                                            public void run() {
+                                                if (!isFinishing() && web != null) {
+                                                    web.loadUrl("https://jw.csuse.edu.cn/jsxsd/sso.jsp");
+                                                }
+                                            }
+                                        }, 1200);
+                                    } else {
+                                        setStatus("扫码成功，但学校没给教务会话");
+                                        toast("扫码进的是门户，教务子系统没放行；请重新扫码，或改用导入文件");
+                                    }
                                 }
                             });
                 }
@@ -365,10 +379,15 @@ public class EduLoginActivity extends Activity {
      * 后面 eduFetch 自然报「未登录（没有该域名的会话）」。
      */
     private void clickEduEntry() {
-        if (web == null || ssoTried) return;
-        ssoTried = true;
+        if (web == null) return;
         setStatus("正在进入教务系统…");
-        web.loadUrl("https://jw.csuse.edu.cn/jsxsd/sso.jsp");
+        if (!ssoTried) {
+            ssoTried = true;
+            web.loadUrl("https://jw.csuse.edu.cn/jsxsd/sso.jsp");
+        } else {
+            // 单点登录没换到教务会话：退回扫码入口重来一次（门户会话还在，通常直接过）
+            web.loadUrl(WECOM_ENTRY);
+        }
     }
 
     private void clickEduEntryLegacy() {

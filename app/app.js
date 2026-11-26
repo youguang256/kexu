@@ -2347,11 +2347,10 @@
       '支持三种：① 手机日历导出的 <b>.ics</b>；② 教务系统复制的表格（直接粘贴 HTML 或表格文本）；③ 自己整理的 <b>.csv</b>（列名：课程,教师,星期,开始节,结束节,周次,地点）。</div>' +
       // 抓课表的入口一直显示：以前只在「已登录」时才出现，
       // 一旦会话过期，整个抓取入口就消失，看起来像「弹窗被删了」。
-      '<button class="btn primary block" data-act="edu-login">学号登录并抓整学期课表</button>' +
-      '<button class="btn block" data-act="edu-login-qr" style="margin-top:8px">企业微信扫码登录</button>' +
+      '<button class="btn primary block" data-act="edu-login-qr">企业微信扫码登录并抓课表</button>' +
       (eduLoggedIn()
         ? '<div class="small muted" style="margin:8px 0 10px">已登录 · <a href="javascript:void(0)" data-act="edu-logout">退出</a></div>'
-        : '<div class="small muted" style="margin:8px 0 10px">推荐用学号：默认密码就是学号，一次拿整学期</div>') +
+        : '<div class="small muted" style="margin:8px 0 10px">扫码后用门户会话换教务会话，不需要再输密码</div>') +
       '<button class="btn primary block" data-act="edu-jsxsd" style="margin-top:6px">从旧教务系统拉整学期课表</button>' +
       '<button class="btn block" data-act="edu-timetable">从教务系统同步课表（新版 H5）</button>' +
       '<div class="small muted" style="margin:8px 0 14px">点「取二维码」→ 企业微信扫一扫 → 相册选图，扫完自动回 App</div>' +
@@ -3260,19 +3259,6 @@
     if (act === 'import-open') { importSheet(); return; }
     if (act === 'edu-login') { eduLogin(); return; }
     if (act === 'edu-login-qr') { closeSheet(); eduLoginQr(); return; }
-    if (act === 'edu-do-login') {
-      var accEl = document.getElementById('edu-acc');
-      var pwdEl = document.getElementById('edu-pwd');
-      var acc = accEl ? accEl.value.trim() : '';
-      var pwd = pwdEl ? pwdEl.value.trim() : '';
-      if (!acc) { toast('先填学号'); return; }
-      closeSheet();
-      busyOpen('正在登录教务', '学号 ' + acc + ' · 密码' + (pwd ? '已填写' : '默认用学号'));
-      busyStep(1);
-      busyLog('正在向教务系统登录…');
-      try { eduNative().eduLoginWith(acc, pwd); } catch (e) { toast('调用失败：' + e.message, 5000); }
-      return;
-    }
     if (act === 'edu-logout') { eduLogout(); return; }
     if (act === 'edu-timetable') { closeSheet(); eduSyncTimetable(); return; }
     if (act === 'edu-jsxsd' || act === 'edu-timetable') {
@@ -3819,27 +3805,12 @@
   }
 
   /**
-   * 抓课表主路径（0.7.34 的做法）：学号登录。
-   * 它会用 csrf + sess + 加密串直连教务，登录成功后**同一个会话里**把课表页拿走，
-   * 所以不需要额外再要一次 jw 会话 —— 扫码那条路就是因为拿不到 jw 会话才总失败。
+   * 登录：只走企业微信扫码。
+   * 扫码进的是统一门户；进去之后原生会自己打开教务的单点登录地址（sso.jsp）
+   * 把门户会话换成教务会话，再抓课表 —— 不需要用户在 App 里输账号密码。
    */
   function eduLogin() {
-    var n = eduNative();
-    if (!n || typeof n.eduLoginWith !== 'function') {
-      toast('这个版本不支持学号登录，请更新 App', 5000);
-      return;
-    }
-    var last = '';
-    try { last = localStorage.getItem('eduAccount') || ''; } catch (e) {}
-    openSheet('登录教务系统',
-      '<div class="small muted" style="line-height:1.9;margin-bottom:12px">' +
-      '输学号就行——默认密码和学号一样。改过密码的，把新密码填第二格。</div>' +
-      '<div class="form-row"><label>学号</label>' +
-      '<input id="edu-acc" inputmode="numeric" autocomplete="username" placeholder="例如 264150116" value="' + esc(last) + '"></div>' +
-      '<div class="form-row"><label>密码</label>' +
-      '<input id="edu-pwd" type="password" autocomplete="current-password" placeholder="留空 = 和学号一样"></div>' +
-      '<button class="btn primary block" data-act="edu-do-login" style="margin-top:14px">登录并抓取</button>' +
-      '<button class="btn block" data-act="edu-login-qr" style="margin-top:8px">改用企业微信扫码</button>');
+    eduLoginQr();
   }
 
   /** 扫码登录（备选）：打开原生 WebView 扫码页 */
@@ -3847,26 +3818,14 @@
     eduLoginWithBusy();
   }
 
-  /** 学号登录的结果回调 */
-  window.onEduLoginResult = function (res) {
-    if (!res || !res.ok) {
-      busyLog('登录失败：' + ((res && res.msg) || '未知'));
-      busyStep(3);
-      busyTimer = setTimeout(busyClose, 1500);
-      toast('登录失败：' + ((res && res.msg) || '未知错误'), 6000);
-      render();
-      return;
-    }
-    try {
-      var el = document.getElementById('edu-acc');
-      if (el && el.value) localStorage.setItem('eduAccount', el.value.trim());
-    } catch (e) {}
-    afterEduLogin();
-  };
+  /** 扫码登录（备选）：打开原生 WebView 扫码页 */
+  function eduLoginQr() {
+    eduLoginWithBusy();
+  }
 
   /**
    * 登录成功后统一收尾：先抓整学期课表，接着考试、成绩。
-   * 扫码登录成功后由 onEduLoginChanged 调它；账号密码那套已整体移除。
+   * 扫码登录成功后由 onEduLoginChanged（原生返回）调用它。
    */
   function afterEduLogin() {
     busyLog('已登录，正在拉整学期课表…');
