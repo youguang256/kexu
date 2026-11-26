@@ -2345,12 +2345,15 @@
     openSheet('导入课表',
       '<div class="small muted" style="line-height:1.9;margin-bottom:12px">' +
       '支持三种：① 手机日历导出的 <b>.ics</b>；② 教务系统复制的表格（直接粘贴 HTML 或表格文本）；③ 自己整理的 <b>.csv</b>（列名：课程,教师,星期,开始节,结束节,周次,地点）。</div>' +
+      // 抓课表的入口一直显示：以前只在「已登录」时才出现，
+      // 一旦会话过期，整个抓取入口就消失，看起来像「弹窗被删了」。
       (eduLoggedIn()
-        ? '<button class="btn primary block" data-act="edu-jsxsd">从旧教务系统拉整学期课表</button>' +
-          '<button class="btn block" data-act="edu-timetable">从教务系统同步课表（新版 H5）</button>' +
-          '<div class="small muted" style="margin:8px 0 14px">已登录教务系统 · <a href="javascript:void(0)" data-act="edu-logout">退出</a></div>'
+        ? '<div class="small muted" style="margin:0 0 8px">已登录教务系统 · <a href="javascript:void(0)" data-act="edu-logout">退出</a></div>'
         : '<button class="btn primary block" data-act="edu-login">扫码登录教务系统</button>' +
-          '<div class="small muted" style="margin:8px 0 14px">默认是企业微信扫码页：点「存二维码」→ 企业微信扫一扫 → 相册选图；不行就切「密码」</div>') +
+          '<div class="small muted" style="margin:6px 0 10px">没登录也能先看看下面两个入口，点了会提示先扫码</div>') +
+      '<button class="btn primary block" data-act="edu-jsxsd" style="margin-top:6px">从旧教务系统拉整学期课表</button>' +
+      '<button class="btn block" data-act="edu-timetable">从教务系统同步课表（新版 H5）</button>' +
+      '<div class="small muted" style="margin:8px 0 14px">点「取二维码」→ 企业微信扫一扫 → 相册选图，扫完自动回 App</div>' +
       '<button class="btn block" data-act="pick-file">选择文件</button>' +
       '<div class="form-row" style="margin-top:14px"><label>或者直接粘贴内容</label>' +
       '<textarea id="paste-area" placeholder="把课表表格 / ics 内容粘进来"></textarea></div>' +
@@ -3257,6 +3260,9 @@
     if (act === 'edu-login') { eduLogin(); return; }
     if (act === 'edu-logout') { eduLogout(); return; }
     if (act === 'edu-timetable') { closeSheet(); eduSyncTimetable(); return; }
+    if (act === 'edu-jsxsd' || act === 'edu-timetable') {
+      if (!eduLoggedIn()) { toast('先扫码登录一次，再用这个入口抓课表', 5000); return; }
+    }
     if (act === 'edu-jsxsd') {
       closeSheet();
       eduGrabJsxsd(false).catch(function (e) { toast('拉课表失败：' + e.message, 6000); });
