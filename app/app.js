@@ -219,6 +219,61 @@
     }).join('');
   }
 
+  /* ───────────── 版本检查（顶栏提示用）───────────── */
+
+  var updLatest = '';          // GitHub 上最新的版本号，空 = 没查到 / 已是最新
+
+  function verNum(v) {
+    var m = String(v || '').match(/(\d+)\.(\d+)\.(\d+)/);
+    return m ? (Number(m[1]) * 10000 + Number(m[2]) * 100 + Number(m[3])) : 0;
+  }
+
+  /** 只比对 tag，不下载任何东西；失败就安静地什么都不做 */
+  function refreshUpdateBadge() {
+    var cfg = window.CP_BUILD || {};
+    var repo = String(cfg.updateRepo || '').trim();
+    if (!repo) return;
+    var cur = window.CP_VERSION || '';
+    if (!cur) return;
+
+    var apply = function (latest) {
+      if (!latest) return;
+      if (verNum(latest) > verNum(cur)) {
+        updLatest = latest;
+        if (tab === 'timetable' || tab === 'settings') renderHeader();
+      }
+    };
+
+    // 先看缓存：6 小时内不重复打 GitHub API
+    try {
+      var c = JSON.parse(localStorage.getItem('cp-upd') || '{}');
+      if (c && c.at && Date.now() - c.at < 6 * 3600 * 1000) { apply(c.latest); return; }
+    } catch (e) { }
+
+    var save = function (latest) {
+      try { localStorage.setItem('cp-upd', JSON.stringify({ at: Date.now(), latest: latest || '' })); } catch (e) { }
+      apply(latest);
+    };
+
+    fetch('https://api.github.com/repos/' + repo + '/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (j && j.tag_name) return save(j.tag_name);
+        // 没有 release 就退回看 tag
+        return fetch('https://api.github.com/repos/' + repo + '/tags', { headers: { Accept: 'application/vnd.github+json' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (arr) {
+            if (Array.isArray(arr) && arr.length) {
+              var best = arr.map(function (x) { return x.name; })
+                .sort(function (a, b) { return verNum(b) - verNum(a); })[0];
+              return save(best);
+            }
+            save('');
+          });
+      })
+      .catch(function () { /* 没网就算了，不打扰 */ });
+  }
+
   /** 设置里可以再进一层（更多 / 关于这类页） */
   var subView = '';
 
@@ -240,8 +295,13 @@
       }
     }
 
+    var updChip = (updLatest && tab === 'timetable')
+      ? '<button class="hdr-upd" data-act="hdr-more" aria-label="有新版本，查看详情">检测到最新版本</button>'
+      : '';
+
     hdr.innerHTML =
-      '<div class="hdr-row"><h1>' + title + '</h1><div class="hdr-actions">' + action + '</div></div>' +
+      '<div class="hdr-row"><h1>' + title + '</h1>' + updChip +
+      '<div class="hdr-actions">' + action + '</div></div>' +
       '<div class="hdr-sub">' + sub + '</div>';
   }
 
@@ -3251,6 +3311,7 @@
       return;
     }
     if (act === 'open-more') { subView = 'more'; render(); return; }
+    if (act === 'hdr-more') { tab = 'settings'; subView = 'more'; render(); return; }
     if (act === 'close-more') { subView = ''; render(); return; }
     if (act === 'more-update') { checkUpdate(); return; }
     if (act === 'more-lang') {
@@ -4385,12 +4446,14 @@
   /* ───────────── 启动 ───────────── */
 
   window.__cpRender = render;
+  window.__cpCheckUpdate = refreshUpdateBadge;   // 排障/手动刷新用
   window.__cpState = function () { return state; };
   window.__cpBuildAlarms = buildAlarms;   // 排障用：能在控制台直接看排了哪些闹钟
 
   startCxAutoSync();
   render();
   maybeOnboard();
+  refreshUpdateBadge();
   if (typeof S.demoPurgedCount === 'function' && S.demoPurgedCount() > 0) {
     toast('已清除内置的示例课程 / 待办 / 成绩', 4200);
   }
