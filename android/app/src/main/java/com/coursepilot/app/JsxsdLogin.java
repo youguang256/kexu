@@ -39,6 +39,26 @@ public final class JsxsdLogin {
 
     private JsxsdLogin() {}
 
+    /**
+     * 登录时顺手把课表页抓下来放这里。
+     * 为什么要「顺手」：换一次请求就得再查一遍 Cookie 表，多一个可能失败的环节；
+     * 同一个会话里直接接着抓，最稳。
+     */
+    static volatile String lastTimetable = "";
+    static volatile String lastTimetableErr = "";
+
+    static String takeTimetable() {
+        String v = lastTimetable;
+        lastTimetable = "";
+        return v == null ? "" : v;
+    }
+
+    static String takeTimetableErr() {
+        String v = lastTimetableErr;
+        lastTimetableErr = "";
+        return v == null ? "" : v;
+    }
+
     /** 返回 {"ok":true,"cookie":"..."} 或 {"ok":false,"msg":"...","needChange":true/false} */
     static String login(Context ctx, String account, String password) {
         Map<String, String> jar = new LinkedHashMap<>();
@@ -84,6 +104,22 @@ public final class JsxsdLogin {
 
             String cookie = join(jar);
             saveCookie(ctx, cookie);
+
+            // 同一个会话里紧接着抓课表页：一次就是整学期
+            lastTimetable = "";
+            lastTimetableErr = "";
+            try {
+                String kb = get(BASE + "/jsxsd/xskb/xskb_list.do?viweType=0", jar);
+                if (kb != null && kb.contains("kbdataUl")) {
+                    lastTimetable = kb;
+                } else if (kb != null && kb.contains("Logon.do")) {
+                    lastTimetableErr = "课表页被跳回登录页（len=" + kb.length() + "）";
+                } else {
+                    lastTimetableErr = "课表页没有课表网格（len=" + (kb == null ? -1 : kb.length()) + "）";
+                }
+            } catch (Exception e) {
+                lastTimetableErr = "取课表页出错：" + e.getMessage();
+            }
             JSONObject ok = new JSONObject();
             ok.put("ok", true);
             ok.put("cookie", cookie);

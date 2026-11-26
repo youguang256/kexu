@@ -387,6 +387,17 @@ public class NativeBridge {
         }).start();
     }
 
+    /** 登录时顺手抓下来的课表页（取走即清空），前端用它解析，不用再发一次请求 */
+    @JavascriptInterface
+    public String takeJsxsdTimetable() {
+        return JsxsdLogin.takeTimetable();
+    }
+
+    @JavascriptInterface
+    public String takeJsxsdError() {
+        return JsxsdLogin.takeTimetableErr();
+    }
+
     @JavascriptInterface
     public void eduLogin() {
         act.runOnUiThread(new Runnable() {

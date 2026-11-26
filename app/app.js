@@ -3723,9 +3723,25 @@
     var n = eduNative();
     if (!n) return Promise.reject(new Error('网页版没有原生桥'));
     if (!quiet) toast('正在从旧教务系统取整学期课表…', 6000);
+    // 优先用「登录时顺手抓下来的那一份」：同一个会话，不用再查 Cookie、不会再失败一次
+    var pre = '';
+    try { pre = (n.takeJsxsdTimetable && n.takeJsxsdTimetable()) || ''; } catch (e) { pre = ''; }
+    var preErr = '';
+    try { preErr = (n.takeJsxsdError && n.takeJsxsdError()) || ''; } catch (e) { preErr = ''; }
+    if (pre && pre.indexOf('kbdataUl') >= 0) {
+      return Promise.resolve(parseAndImportJsxsd(pre));
+    }
     return eduReq('https://jw.csuse.edu.cn/jsxsd/xskb/xskb_list.do?viweType=0', 'GET')
       .then(function (html) {
-        if (!html || html.indexOf('kbdataUl') < 0) throw new Error('课表页没拿到（会话可能过期）');
+        if (!html || html.indexOf('kbdataUl') < 0) {
+          throw new Error(preErr ? ('课表页没拿到：' + preErr) : '课表页没拿到（会话可能过期）');
+        }
+        return parseAndImportJsxsd(html);
+      });
+  }
+
+  function parseAndImportJsxsd(html) {
+    {
         var courses = window.JWParser.parseJwTimetable(html, { totalWeeks: 20 });
         if (!courses.length) throw new Error('课表页解析出的课程是 0 门');
         applyImport(courses, 'replace');
@@ -3737,7 +3753,7 @@
         var ws = Object.keys(weeks).map(Number).sort(function (a, b) { return a - b; });
         toast('已从旧教务系统导入 ' + courses.length + ' 门课，覆盖第 ' + ws[0] + '–' + ws[ws.length - 1] + ' 周', 6000);
         return courses.length;
-      });
+    }
   }
 
   function eduSyncTimetable() {
