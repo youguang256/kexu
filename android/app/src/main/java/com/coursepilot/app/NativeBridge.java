@@ -22,19 +22,6 @@ public class NativeBridge {
         this.act = a;
     }
 
-    /** 主界面会把 WebView 塞进来，学号登录结束后靠它回调网页 */
-    static android.webkit.WebView host;
-
-    static void emit(String js) {
-        final android.webkit.WebView w = host;
-        if (w == null) return;
-        w.post(new Runnable() {
-            @Override public void run() {
-                w.evaluateJavascript(js, null);
-            }
-        });
-    }
-
     /** 当前该用哪个通道（有自定义铃声就用带指纹的 custom 通道） */
     static String activeChannel(Context c) {
         android.content.SharedPreferences sp = c.getSharedPreferences(PREFS_KEY, Context.MODE_PRIVATE);
@@ -366,50 +353,6 @@ public class NativeBridge {
     }
 
     /** 打开教务登录页（0.6.3 验证过的 H5 接口链路；适配器版本见 AdapterActivity，暂未启用） */
-    /**
-     * 学号登录（免网页）：密码默认就是学号，前端只让用户输学号。
-     * 返回 {"ok":true,"cookie":"..."} 或 {"ok":false,"msg":"...","needChange":bool}
-     * 注意：这是网络请求，必须放在后台线程，别在主线程直接调。
-     */
-    @JavascriptInterface
-    public void eduLoginWith(final String account, final String password) {
-        if (account == null || account.trim().isEmpty()) {
-            emit("window.onEduLoginResult && window.onEduLoginResult(" +
-                    "{\"ok\":false,\"msg\":\"先填学号\"})");
-            return;
-        }
-        final String pwd = (password == null || password.isEmpty()) ? account.trim() : password;
-        new Thread(new Runnable() {
-            @Override public void run() {
-                String out = JsxsdLogin.login(act, account.trim(), pwd);
-                emit("window.onEduLoginResult && window.onEduLoginResult(" + out + ")");
-            }
-        }).start();
-    }
-
-    /** 登录时顺手抓下来的课表页（取走即清空），前端用它解析，不用再发一次请求 */
-    @JavascriptInterface
-    public String takeJsxsdTimetable() {
-        return JsxsdLogin.takeTimetable();
-    }
-
-    @JavascriptInterface
-    public String takeJsxsdError() {
-        return JsxsdLogin.takeTimetableErr();
-    }
-
-    /** 当前学期 id（如 2026-2027-1），考试接口要用 */
-    @JavascriptInterface
-    public String takeJsxsdTerm() {
-        return JsxsdLogin.takeTerm();
-    }
-
-    /** 教务认的当前周次（第N周），0 表示没抓到 */
-    @JavascriptInterface
-    public int takeJsxsdWeek() {
-        return JsxsdLogin.takeWeek();
-    }
-
     @JavascriptInterface
     public void eduLogin() {
         act.runOnUiThread(new Runnable() {
@@ -694,6 +637,7 @@ public class NativeBridge {
 
     /* ───────── 下载最新版 / 外部链接 ───────── */
 
+    /** 用系统浏览器打开链接：查更新、下载 APK、开仓库都走它 */
     /** 复制到剪贴板：微信没有「打开某个个人号主页」的协议，只能复制号去搜索 */
     @JavascriptInterface
     public void copyText(final String text) {
@@ -709,7 +653,6 @@ public class NativeBridge {
         });
     }
 
-    /** 用系统浏览器 / 其它 App 打开链接：查更新、下载 APK、打开微信都走它 */
     @JavascriptInterface
     public void openExternal(final String url) {
         if (url == null || url.isEmpty()) return;
