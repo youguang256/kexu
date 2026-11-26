@@ -41,7 +41,7 @@ import java.net.URL;
  *     https://open.work.weixin.qq.com/wwopen/sso/qrConnect?agentid=1000007&appid=ww1dc2befd6c57f07f&...
  *     二维码可保存到相册，用企业微信「扫一扫 → 相册」扫。
  *     如果授权后回跳发生在企业微信内部浏览器，登录态不会回到本 App —— 那就用 B。
- *  （账号密码通道已移除：App 不再支持用学号+密码抓课表）
+ *  B. 账号密码（强智登录页），学号会记住。
  */
 public class EduLoginActivity extends Activity {
 
@@ -105,6 +105,12 @@ public class EduLoginActivity extends Activity {
             @Override public void onClick(View v) { modeQr = true; web.loadUrl(WECOM_ENTRY); }
         });
         bar.addView(qrBtn);
+
+        Button pwdBtn = smallBtn("密码");
+        pwdBtn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { modeQr = false; web.loadUrl(PWD_URL); }
+        });
+        bar.addView(pwdBtn);
 
         Button saveBtn = smallBtn("存二维码");
         saveBtn.setOnClickListener(new View.OnClickListener() {
@@ -214,7 +220,7 @@ public class EduLoginActivity extends Activity {
                     if (url.indexOf("/login") >= 0) {
                         // 第一次登录会先落在这里（要填学号密码）。以前这时就把抓取流程跑掉了，
                         // 所以第一次永远抓不到，得退出去再进一次。
-                        setStatus("请用企业微信扫码登录，登录后会自动继续");
+                        setStatus("请先登录（学号/工号 + 密码，或扫码），登录后会自动继续");
                         waitLeavingLogin();
                         return;
                     }
@@ -231,11 +237,11 @@ public class EduLoginActivity extends Activity {
                     hooksStarted = true;
                     setStatus("已登录，正在抓课表…");
                     injectNetHook();
-                    handler.postDelayed(new Runnable() { public void run() { driveToTimetable(); } }, 2500);
-                    // 接口方式优先：一次拿整学期（含所有周次）
-                    handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 6000);
-                    // 屏幕方式兜底（只有当前这一周）
-                    handler.postDelayed(new Runnable() { public void run() { grabFromDom(); } }, 15000);
+                    // 先切到 H5 站点直接用它的接口，拿不到再退回页面解析
+                    handler.postDelayed(new Runnable() { public void run() { driveToTimetable(); } }, 1500);
+                    handler.postDelayed(new Runnable() { public void run() { sweepWeeksThenImport(); } }, 4000);
+        handler.postDelayed(new Runnable() { public void run() { hideFetchOverlay(); } }, 25000);
+                    handler.postDelayed(new Runnable() { public void run() { grabFromDom(); } }, 16000);
                     handler.postDelayed(new Runnable() {
                         public void run() {
                             if (finished) return;
@@ -245,7 +251,7 @@ public class EduLoginActivity extends Activity {
                                     + "接口抓到: " + (apiCount < 0 ? "未执行" : apiCount + " 条") + NL()
                                     + "屏幕抓到: " + (domCount < 0 ? "未执行" : domCount + " 条") + NL()
                                     + NL() + "如果接口是 0，说明解析没对上字段；把这段发我。";
-                            showDialog("本次抓取结果", msg);
+                            setStatus("抓取结束（要看细节点右上「诊断」）");
                         }
                     }, 18000);
                 }
@@ -275,7 +281,9 @@ public class EduLoginActivity extends Activity {
                             "(function(){var i=document.getElementById('userAccount');return i?'login':'ok'})()",
                             value -> {
                                 if (value != null && value.contains("login")) {
-                                    toast("没进到教务：请点「扫码」重扫一次");
+                                    toast("没进到教务：请重扫一次，或点「密码」用学号+初始密码登录");
+                                    modeQr = false;
+                                    autofillUser();
                                 }
                             });
                 }
@@ -337,9 +345,9 @@ public class EduLoginActivity extends Activity {
                             hooksStarted = true;
                             setStatus("已登录，正在抓课表…");
                             injectNetHook();
-                            handler.postDelayed(new Runnable() { public void run() { driveToTimetable(); } }, 2500);
-                            handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 6000);
-                            handler.postDelayed(new Runnable() { public void run() { grabFromDom(); } }, 15000);
+                            handler.postDelayed(new Runnable() { public void run() { driveToTimetable(); } }, 1500);
+                            handler.postDelayed(new Runnable() { public void run() { sweepWeeksThenImport(); } }, 4000);
+                            handler.postDelayed(new Runnable() { public void run() { grabFromDom(); } }, 16000);
                         } else if (!stillLogin) {
                             // 停在门户首页（SPA 不触发 onPageFinished）时也主动点一次入口
                             if (href.indexOf("ps.csuse.edu.cn") >= 0 && !entryClicked && href.indexOf("/login") < 0) {
@@ -387,26 +395,29 @@ public class EduLoginActivity extends Activity {
 
     /** 全屏「正在获取课表」面板：网页在它下面继续运行 */
     private View buildFetchOverlay() {
+        // 只做一个贴底的小条，不要再盖住整页 —— 之前整屏遮罩害得页面点不动
         FrameLayout wrap = new FrameLayout(this);
-        wrap.setBackgroundColor(Color.parseColor("#0b0e13"));
+        wrap.setBackgroundColor(Color.TRANSPARENT);
+        wrap.setClickable(false);
+        wrap.setFocusable(false);
         wrap.setVisibility(View.GONE);
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setGravity(Gravity.CENTER_HORIZONTAL);
-        card.setPadding(48, 44, 48, 36);
+        card.setPadding(20, 14, 20, 10);
         android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
         bg.setColor(Color.parseColor("#131922"));
         bg.setCornerRadius(56f);
         card.setBackground(bg);
 
         android.widget.ProgressBar spin = new android.widget.ProgressBar(this);
-        card.addView(spin, new LinearLayout.LayoutParams(dp(38), dp(38)));
+        card.addView(spin, new LinearLayout.LayoutParams(dp(20), dp(20)));
 
         TextView title = new TextView(this);
-        title.setText("正在获取课表");
+        title.setText("正在获取课表…");
         title.setTextColor(Color.parseColor("#e8eef7"));
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 19);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         title.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -435,9 +446,10 @@ public class EduLoginActivity extends Activity {
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.gravity = Gravity.CENTER;
-        lp.leftMargin = dp(28);
-        lp.rightMargin = dp(28);
+        lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        lp.leftMargin = dp(24);
+        lp.rightMargin = dp(24);
+        lp.bottomMargin = dp(28);
         wrap.addView(card, lp);
 
         fetchOverlay = wrap;
@@ -449,11 +461,11 @@ public class EduLoginActivity extends Activity {
     }
 
     private void showFetchOverlay(String sub) {
+        // 不再显示任何遮罩/浮条：抓取时页面必须完全可点（用户要自己切周次）
         runOnUiThread(new Runnable() {
             public void run() {
                 try {
                     if (fetchSub != null && sub != null) fetchSub.setText(sub);
-                    if (fetchOverlay != null) fetchOverlay.setVisibility(View.VISIBLE);
                 } catch (Exception ignored) { }
             }
         });
@@ -545,6 +557,8 @@ public class EduLoginActivity extends Activity {
 
     /** 把 Cookie 和三个接口的探测结果弹出来，便于定位抓不到的原因 */
     private void diagnose() {
+        dumpNetLog();          // 顺手把整份网络记录落盘
+        dumpGridDom();         // 再把渲染出来的课表 DOM 存一份
         final String cookie = CookieManager.getInstance().getCookie("https://jw.csuse.edu.cn");
         // WebView 的方法只能在主线程调用，先在主线程取出来
         final String curUrl = (web == null ? "-" : web.getUrl());
@@ -635,18 +649,22 @@ public class EduLoginActivity extends Activity {
 
     private static final java.util.List<String> CAP = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
 
+
     /** 在 jwh5 页面里挂钩 fetch / XHR，把接口调用记下来 */
     private void injectNetHook() {
         if (web == null) return;
         String js = "(function(){try{"
                 + "if(window.__cpHooked)return 'already';window.__cpHooked=1;window.__cpCap=[];"
                 + "function push(o){try{window.__cpCap.push(o);if(window.__cpCap.length>80)window.__cpCap.shift();}catch(e){}}"
-                + "function big(u,t){return /classtimetable|curriculum|teachingCourse|getXqKbJcMess/.test(u)?t.slice(0,200000):t.slice(0,160);}"
+                + "function big(u,t){return t.slice(0,120000);}"
                 + "var of=window.fetch;"
-                + "window.fetch=function(){var a=arguments[0];var u=(a&&a.url)?a.url:String(a);var p=of.apply(this,arguments);"
+                + "window.fetch=function(){var a=arguments[0];var u=(a&&a.url)?a.url:String(a);"
+                + "try{var h=(arguments[1]&&arguments[1].headers)||(a&&a.headers);if(h){if(h.get){var tv=h.get('token')||h.get('Token');if(tv)window.__cpToken=tv;}else{var tk=h.token||h.Token;if(tk)window.__cpToken=tk;}}}catch(e){}"
+                + "var p=of.apply(this,arguments);"
                 + "try{p.then(function(r){try{r.clone().text().then(function(t){push({m:'fetch',u:u,s:r.status,l:t.length,t:big(u,t)});});}catch(e){}});}catch(e){}"
                 + "return p;};"
-                + "var oo=XMLHttpRequest.prototype.open,os=XMLHttpRequest.prototype.send;"
+                + "var oo=XMLHttpRequest.prototype.open,os=XMLHttpRequest.prototype.send,oh=XMLHttpRequest.prototype.setRequestHeader;"
+                + "XMLHttpRequest.prototype.setRequestHeader=function(k,v){try{if(/^token$/i.test(String(k)))window.__cpToken=v;}catch(e){}return oh.apply(this,arguments);};"
                 + "XMLHttpRequest.prototype.open=function(m,u){this.__m=m;this.__u=u;return oo.apply(this,arguments);};"
                 + "XMLHttpRequest.prototype.send=function(){var x=this;"
                 + "x.addEventListener('load',function(){try{var uu=String(x.__u);push({m:x.__m,u:uu,s:x.status,l:(x.responseText||'').length,t:big(uu,String(x.responseText||''))});}catch(e){}});"
@@ -658,10 +676,162 @@ public class EduLoginActivity extends Activity {
     private volatile boolean h5Tried = false;
     private int h5Retry = 0;
 
+    private volatile boolean h5Jumped = false;
+
+    /** 登录成功后把页面切到 H5 站点：token 存在它自己的 sessionStorage 里，
+     *  停在 jw.csuse.edu.cn 上是读不到的 —— 这是「接口抓到 0 条」的根因。 */
+    private void jumpToH5ThenGrab() {
+        if (h5Jumped) return;
+        if (web == null) return;
+        // 没有教务会话就直接跳过去只会看到登录页，等门户把 SSO 交出来再说
+        boolean has = false;
+        try { has = EduCookies.loggedIn(this); } catch (Exception ignored) { }
+        if (!has) {
+            handler.postDelayed(new Runnable() { public void run() { jumpToH5ThenGrab(); } }, 2000);
+            return;
+        }
+        h5Jumped = true;
+        setStatus("正在读取教务接口…");
+        // 不再跳走页面（用户还要在上面操作），直接问页面要 token
+        autoGrabH5();
+        handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 3000);
+        handler.postDelayed(new Runnable() { public void run() { autoGrabH5(); } }, 8000);
+    }
+
+    /**
+     * 学校后端只认“页面自己点周次”发出来的请求 —— 我们直接 POST 拿不到别的周。
+     * 所以在页面里模拟点「下一周 / 上一周」箭头，靠已有的网络钩子把每周响应收下来，
+     * 再在页面里合并成一份课表。
+     */
+    private void sweepWeeksThenImport() {
+        if (web == null) return;
+        setStatus("正在按周翻页抓取…（每翻一页约 1.4 秒）");
+        String js = "(function(){"
+                + "if(window.__cpSweep)return 'busy';window.__cpSweep=1;window.__cpWeekBodies=[];"
+                + "var seen={};"
+                + "function harvest(){(window.__cpCap||[]).forEach(function(c){"
+                + "  var t=c.t||'';"
+                + "  if(t.indexOf('classTime')<0 && t.indexOf('\"item\"')<0)return;"
+                + "  var k=(c.u||'')+'|'+t.length;if(seen[k])return;seen[k]=1;"
+                + "  window.__cpWeekBodies.push(t);});}"
+                + "function arrows(){var all=[].slice.call(document.querySelectorAll('i,span,button,div,em'));"
+                + "  var out=[];all.forEach(function(e){if(e.children.length>1)return;"
+                + "    var t=(e.innerText||'').trim();var c=String(e.className||'');"
+                + "    var isArrow=/^[<>‹›❮❯]$/.test(t)||/arrow|prev|next/i.test(c);if(!isArrow)return;"
+                + "    var r=e.getBoundingClientRect();if(r.width<8||r.height<8)return;"
+                + "    if(r.top<0||r.top>window.innerHeight)return;out.push({el:e,x:r.left});});"
+                + "  out.sort(function(a,b){return a.x-b.x;});return out;}"
+                + "var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};"
+                + "(async function(){try{"
+                + "  var a=arrows();if(a.length<2){window.__cpSweep='no-arrows';return;}"
+                + "  var next=a[a.length-1].el,prev=a[0].el;"
+                + "  for(var i=0;i<10;i++){next.click();await sleep(1600);harvest();}"
+                + "  for(var j=0;j<10;j++){prev.click();await sleep(1600);harvest();}"
+                + "  var items={};"
+                + "  function take(it){if(!it)return;var k=(it.jx0408id||'')+'|'+(it.classTime||'')+'|'+(it.courseName||'');if(it.courseName||it.classTime)items[k]=it;}"
+                + "  window.__cpWeekBodies.forEach(function(b){try{var o=JSON.parse(b);"
+                + "    if(Array.isArray(o)){o.forEach(function(x){if(x&&typeof x==='object'){if(x.classTime)take(x);}});return;}"
+                + "    (o.data||[]).forEach(function(d){(d.item||[]).forEach(take);"
+                + "      if(d.classTime)take(d);});"
+                + "  }catch(e){}});"
+                + "  var arr=Object.keys(items).map(function(k){return items[k];});"
+                + "  var pack={Msg:'success~',code:'1',nowWeek:(window.__cpNowWeek||'0'),data:[{weekday:'一',week:0,item:arr}]};"
+                + "  var s=JSON.stringify(pack);"
+                + "  var b='';try{b=btoa(unescape(encodeURIComponent(s)));}catch(e){b='';}"
+                + "  window.__cpMerged=b;window.__cpSweep=2;"
+                + "}catch(e){window.__cpSweep='err:'+e.message;}})();"
+                + "return 'started';})()";
+        web.evaluateJavascript(js, null);
+
+        // 轮询结果（12+12 次翻页 ≈ 35 秒）
+        final int[] tries = {0};
+        handler.postDelayed(new Runnable() {
+            public void run() {
+                if (web == null) return;
+                web.evaluateJavascript("(function(){try{return window.__cpMerged||''}catch(e){return ''}})()", value -> {
+                    String b64 = value == null ? "" : value.replace("\"", "");
+                    if (!b64.isEmpty()) {
+                        try {
+                            byte[] dec = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                            final String merged = new String(dec, "UTF-8");
+                            dumpRaw("curriculum-swept.json", merged);
+                            int n = importFromH5(merged, "swept");
+                            apiCount = n;
+                            if (n > 0) {
+                                setStatus("已按周抓取 " + n + " 条，正在导入…");
+                                EduCookies.saveAll(EduLoginActivity.this);
+                                finished = true;
+                                setResult(RESULT_OK);
+                                finish();
+                                return;
+                            }
+                            setStatus("翻页抓到了数据但没解析出来（已存 curriculum-swept.json）");
+                            return;
+                        } catch (Exception ignored) { }
+                    }
+                    if (tries[0]++ < 60) {
+                        handler.postDelayed(this, 1500);
+                    } else {
+                        setStatus("翻页抓取超时（点「诊断」看捕获到的接口）");
+                    }
+                });
+            }
+        }, 6000);
+    }
+
+    /** 把「渲染出来的课表」整块 DOM 存下来：这是页面自己算好的结果，最可信 */
+    private void dumpGridDom() {
+        if (web == null) return;
+        String js = "(function(){try{"
+                + "var lab='';var m=document.body.innerText.match(/第\\s*\\d+\\s*周/);if(m)lab=m[0];"
+                + "var best=null,bestScore=-1;"
+                + "var all=document.querySelectorAll('div,table,section');"
+                + "for(var i=0;i<all.length;i++){var e=all[i];var t=e.innerText||'';"
+                + "  var score=0;if(/第[一二三四五六七八九十]+节|\\d{1,2}\\s*[:：]\\s*\\d{2}/.test(t))score+=2;"
+                + "  if(/星期|周[一二三四五六日]/.test(t))score+=1;"
+                + "  if(score>bestScore&&t.length>40){bestScore=score;best=e;}}"
+                + "if(!best)return '';"
+                + "var html=best.outerHTML||'';"
+                + "var pack={week:lab,score:bestScore,len:html.length,html:html.slice(0,300000)};"
+                + "return btoa(unescape(encodeURIComponent(JSON.stringify(pack))));"
+                + "}catch(e){return ''}})()";
+        web.evaluateJavascript(js, value -> {
+            String b64 = value == null ? "" : value.replace("\"", "");
+            if (b64.isEmpty()) { setStatus("没找到课表容器的 DOM"); return; }
+            try {
+                byte[] dec = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                String path = dumpRaw("grid-dom.json", new String(dec, "UTF-8"));
+                setStatus("课表 DOM 已存 " + (path == null ? "失败" : path));
+            } catch (Exception e) {
+                setStatus("格子落盘失败：" + e.getMessage());
+            }
+        });
+    }
+
+    /** 把整份网络记录落盘：一次就能看清课表数据到底来自哪个接口 */
+    private void dumpNetLog() {
+        if (web == null) return;
+        web.evaluateJavascript("(function(){try{var a=(window.__cpCap||[]).map(function(c){"
+                + "return {m:c.m,u:c.u,s:c.s,l:c.l,t:(c.t||'').slice(0,60000)};});"
+                + "return btoa(unescape(encodeURIComponent(JSON.stringify(a))));}catch(e){return ''}})()", value -> {
+            String b64 = value == null ? "" : value.replace("\"", "");
+            if (b64.isEmpty()) { setStatus("网络记录为空"); return; }
+            try {
+                byte[] dec = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                String json = new String(dec, "UTF-8");
+                String path = dumpRaw("netlog.json", json);
+                setStatus("网络记录已存 " + (path == null ? "失败" : path));
+            } catch (Exception e) {
+                setStatus("记录落盘失败：" + e.getMessage());
+            }
+        });
+    }
+
     /** 从 H5 的 sessionStorage 里取 token，然后直接调它的课表接口 */
     private void autoGrabH5() {
-        if (h5Tried || web == null) return;
+        if (web == null) return;
         web.evaluateJavascript("(function(){try{"
+                + "if(window.__cpToken&&String(window.__cpToken).length>10)return String(window.__cpToken);"
                 + "var keys=['Token','token','access_token','accessToken','Authorization','X-Token'];"
                 + "var st=[sessionStorage,localStorage];"
                 + "for(var i=0;i<st.length;i++){for(var j=0;j<keys.length;j++){var v=st[i].getItem(keys[j]);if(v&&v.length>10)return v;}}"
@@ -724,7 +894,9 @@ public class EduLoginActivity extends Activity {
             public void run() {
                 if (web == null) return;
                 web.evaluateJavascript(
-                        "(function(){try{return JSON.stringify({r:(window.__cpResult||'').slice(0,60000),u:window.__cpResultUrl||''})}catch(e){return ''}})()",
+                        "(function(){try{var r=window.__cpResult||'';"
+                        + "var b='';try{b=btoa(unescape(encodeURIComponent(r)))}catch(e){b=''}"
+                        + "return JSON.stringify({b:b,u:window.__cpResultUrl||''})}catch(e){return ''}})()",
                         value -> {
                             String raw = value == null ? "" : value;
                             if (raw.startsWith("\"") && raw.endsWith("\"") && raw.length() > 1) {
@@ -733,9 +905,19 @@ public class EduLoginActivity extends Activity {
                             raw = raw.replace("\\\"", "\"");
                             try {
                                 org.json.JSONObject o = new org.json.JSONObject(raw);
-                                String r = o.optString("r");
+                                String b64 = o.optString("b");
+                                String r = "";
+                                if (!b64.isEmpty()) {
+                                    try {
+                                        byte[] dec = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                                        r = new String(dec, "UTF-8");
+                                    } catch (Exception e) { r = ""; }
+                                }
+                                if (r.isEmpty()) r = o.optString("r");
                                 String u = o.optString("u");
                                 if (!r.isEmpty()) {
+                                    // 先把接口原文落盘：这是唯一能 100% 对上字段的依据
+                                    final String saved = dumpRaw("curriculum-w" + (r.contains("\"nowWeek\"") ? "" : "") + System.currentTimeMillis() / 1000 % 100000 + ".json", r);
                                     if (importFromH5(r, u) > 0) {
                                         finished = true;
                                         toast("已抓取课表，正在导入…");
@@ -743,7 +925,12 @@ public class EduLoginActivity extends Activity {
                                         finish();
                                         return;
                                     }
-                                    showDialog("课表接口返回", u + NL() + NL() + r);
+                                    setStatus("接口没解析出来 · 原文已存 " + (saved == null ? "失败" : saved));
+                                    if (false) showDialog("课表接口返回（没解析出来）",
+                                        u + NL() + NL()
+                                        + "原文已存：" + (saved == null ? "落盘失败" : saved) + NL() + NL()
+                                        + "把上面这个 json 文件发我，我按真实字段改。" + NL() + NL()
+                                        + r);
                                     return;
                                 }
                             } catch (Exception ignored) {
@@ -770,86 +957,77 @@ public class EduLoginActivity extends Activity {
         try {
             org.json.JSONObject root = new org.json.JSONObject(raw);
             org.json.JSONArray data = root.optJSONArray("data");
+            if (data == null) return 0;
 
-            java.util.List<org.json.JSONObject> items = new java.util.ArrayList<>();
-            java.util.List<Integer> fallbackDays = new java.util.ArrayList<>();
-
-            if (data != null) {
-                for (int d = 0; d < data.length(); d++) {
-                    org.json.JSONObject day = data.optJSONObject(d);
-                    if (day == null) continue;
-                    int dayWd = weekdayOf(day.optString("weekday", ""));
-                    org.json.JSONArray arr = day.optJSONArray("courses");
-                    if (arr == null) arr = day.optJSONArray("item");
-                    if (arr == null) continue;
-                    for (int i = 0; i < arr.length(); i++) {
-                        org.json.JSONObject it = arr.optJSONObject(i);
-                        if (it == null) continue;
-                        items.add(it);
-                        fallbackDays.add(dayWd);
-                    }
-                }
+            // 学校接口的 nowWeek：前端据此对齐学期起点（教务周次常常比它大 1）
+            int nowWeek = root.optInt("nowWeek", 0);
+            if (nowWeek > 0) {
+                getSharedPreferences("coursepilot", MODE_PRIVATE).edit()
+                        .putString("eduNowWeek", String.valueOf(nowWeek)).apply();
             }
-            if (items.isEmpty()) return 0;
 
             org.json.JSONArray out = new org.json.JSONArray();
-            for (int i = 0; i < items.size(); i++) {
-                org.json.JSONObject c = items.get(i);
-                String name = pick(c, "courseName", "kcmc", "name", "title").trim();
-                if (name.isEmpty()) continue;
 
-                // 真实字段：classTime = "星期(1位)+起始小节(2位)+结束小节(2位)"，如 "10102" = 周一第01-02小节
-                //           classWeek = "3,6-17" 周次
-                int wd = 0, sp = 0, ep = 0;
-                String ct = c.optString("classTime", "");
-                if (ct != null && ct.replaceAll("[^0-9]", "").length() >= 5) {
-                    String digits = ct.replaceAll("[^0-9]", "");
-                    wd = intOf(digits.substring(0, 1));
-                    sp = intOf(digits.substring(1, 3));
-                    ep = intOf(digits.substring(3, 5));
-                }
-                if (wd == 0) {
-                    // 退回 weekNoteDetail: "101,102" → 第一位是星期
-                    String wnd = c.optString("weekNoteDetail", "");
-                    if (!wnd.isEmpty()) {
-                        String digits2 = wnd.split(",")[0].replaceAll("[^0-9]", "");
-                        if (digits2.length() >= 3) wd = intOf(digits2.substring(0, 1));
+            for (int d = 0; d < data.length(); d++) {
+                org.json.JSONObject day = data.optJSONObject(d);
+                if (day == null) continue;
+
+                // 真实结构：data[].item[]（老写法 courses[] 也认）
+                org.json.JSONArray items = day.optJSONArray("item");
+                if (items == null) items = day.optJSONArray("courses");
+                if (items == null) continue;
+
+                int dayWd = weekdayOf(day.optString("weekday", ""));
+
+                for (int i = 0; i < items.length(); i++) {
+                    org.json.JSONObject it = items.optJSONObject(i);
+                    if (it == null) continue;
+
+                    String name = pick(it, "courseName", "kcmc", "name", "title").trim();
+                    if (name.isEmpty()) continue;
+
+                    // classTime = 星期(1位) + 起节(2位) + 止节(2位)，如 "10102" = 周一 01-02 小节
+                    int wd = 0, sp = 0, ep = 0;
+                    String ct = it.optString("classTime", "").replaceAll("[^0-9]", "");
+                    if (ct.length() >= 5) {
+                        wd = intOf(ct.substring(0, 1));
+                        sp = intOf(ct.substring(1, 3));
+                        ep = intOf(ct.substring(3, 5));
                     }
+                    if (wd == 0) wd = dayWd;
+                    if (wd < 1 || wd > 7) wd = 1;
+                    if (sp <= 0) {
+                        int[] pe = periodsOf(it);
+                        sp = pe[0];
+                        ep = pe[1];
+                    }
+                    if (sp <= 0) sp = 1;
+                    if (ep < sp) ep = sp;
+
+                    // 小节 → 大节：01-02→1、03-04→2、05-06→3、07-08→4、09-10→5
+                    sp = (sp + 1) / 2;
+                    ep = (ep + 1) / 2;
+                    if (ep < sp) ep = sp;
+                    if (ep > 5) ep = 5;
+
+                    // 周次优先用 classWeekDetails（",3,6,7,..."），退 classWeek / kkzc
+                    String weekSpec = it.optString("classWeekDetails", "");
+                    if (weekSpec == null || weekSpec.replaceAll("[^0-9]", "").isEmpty()) {
+                        weekSpec = pick(it, "classWeek", "kkzc", "zc", "zcd");
+                    }
+
+                    org.json.JSONObject one = new org.json.JSONObject();
+                    one.put("name", name);
+                    one.put("teacher", pick(it, "teacherName", "skjs", "jsmc"));
+                    one.put("location", pick(it, "classroomName", "location", "skdd", "cdmc"));
+                    one.put("weekday", wd);
+                    one.put("startPeriod", sp);
+                    one.put("endPeriod", ep);
+                    one.put("weeks", parseWeeks(weekSpec));
+                    out.put(one);
                 }
-                if (wd == 0) {
-                    String wdRaw = pick(c, "weekDay", "weekday", "xqid", "xq");
-                    if (!wdRaw.isEmpty()) wd = weekdayOf(wdRaw);
-                }
-                if (wd == 0) wd = fallbackDays.get(i);
-                if (wd < 1 || wd > 7) wd = 1;
-
-                if (sp == 0) {
-                    int[] pe = periodsOf(c);
-                    sp = pe[0];
-                    ep = pe[1];
-                }
-                if (sp <= 0) sp = 1;
-                if (ep < sp) ep = sp;
-
-                // 小节 → 大节：01-02→1、03-04→2、05-06→3、07-08→4、09-10→5
-                sp = (sp + 1) / 2;
-                ep = (ep + 1) / 2;
-                if (ep < sp) ep = sp;
-                if (ep > 5) ep = 5;
-
-                // 周次：classWeek "3,6-17"；没有就用 kkzc
-                String weekSpec = pick(c, "classWeek", "kkzc", "zc", "zcd");
-
-                org.json.JSONObject one = new org.json.JSONObject();
-                one.put("name", name);
-                one.put("teacher", pick(c, "teacherName", "skjs", "jsmc"));
-                one.put("location", pick(c, "classroomName", "skdd", "cdmc", "location"));
-                one.put("weekday", wd);
-                one.put("startPeriod", sp);
-                one.put("endPeriod", ep);
-                one.put("weeks", parseWeeks(weekSpec));
-                out.put(one);
             }
+
             if (out.length() == 0) return 0;
 
             getSharedPreferences("coursepilot", MODE_PRIVATE).edit()
@@ -860,6 +1038,65 @@ public class EduLoginActivity extends Activity {
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    /**
+     * 服务器认哪个参数才返回“指定周”？挨个试，用返回内容判断，不猜。
+     * 判定：返回的 data[0].week 等于试探周次，或条目集合与当前周不同。
+     */
+    private String probeWeekParam(String base, String kbjcmsid, String token, String baseline) {
+        String[] cands = {"&week=", "&zc=", "&nowWeek=", "&jxz=", "&weekNum=", "&qs="};
+        java.util.HashSet<String> baseKeys = new java.util.HashSet<>();
+        try {
+            java.util.LinkedHashMap<String, org.json.JSONObject> m = new java.util.LinkedHashMap<>();
+            collectItems(baseline, m);
+            baseKeys.addAll(m.keySet());
+        } catch (Exception ignored) { }
+
+        for (String c : cands) {
+            try {
+                String one = EduHttp.postH5(base + "/student/curriculum?xnxq01id=&kbjcmsid="
+                        + kbjcmsid + c + "3", token);
+                if (one == null || one.isEmpty() || one.startsWith("__ERR__")) continue;
+                org.json.JSONObject root = new org.json.JSONObject(one);
+                org.json.JSONArray data = root.optJSONArray("data");
+                int wk = 0;
+                java.util.LinkedHashMap<String, org.json.JSONObject> m2 = new java.util.LinkedHashMap<>();
+                collectItems(one, m2);
+                if (data != null && data.length() > 0) {
+                    org.json.JSONObject d0 = data.optJSONObject(0);
+                    if (d0 != null) wk = d0.optInt("week", 0);
+                }
+                boolean different = wk == 3 || !m2.keySet().equals(baseKeys);
+                if (different && !m2.isEmpty()) return c;
+            } catch (Exception ignored) { }
+        }
+        return null;
+    }
+
+    /** 把一次响应里的 data[].item[] 收进 map（按 jx0408id+classTime+classWeekDetails 去重） */
+    private static int collectItems(String body, java.util.LinkedHashMap<String, org.json.JSONObject> out) {
+        if (body == null || body.isEmpty() || body.startsWith("__ERR__")) return 0;
+        int added = 0;
+        try {
+            org.json.JSONObject root = new org.json.JSONObject(body);
+            org.json.JSONArray data = root.optJSONArray("data");
+            if (data == null) return 0;
+            for (int d = 0; d < data.length(); d++) {
+                org.json.JSONObject day = data.optJSONObject(d);
+                if (day == null) continue;
+                org.json.JSONArray items = day.optJSONArray("item");
+                if (items == null) continue;
+                for (int i = 0; i < items.length(); i++) {
+                    org.json.JSONObject it = items.optJSONObject(i);
+                    if (it == null) continue;
+                    String key = it.optString("jx0408id", "") + "|" + it.optString("classTime", "")
+                            + "|" + it.optString("courseName", "") + "|" + it.optString("classWeekDetails", "");
+                    if (!out.containsKey(key)) { out.put(key, it); added++; }
+                }
+            }
+        } catch (Exception ignored) { }
+        return added;
     }
 
     private static int intOf(String s) {
@@ -1145,11 +1382,52 @@ public class EduLoginActivity extends Activity {
                 } catch (Exception ignored) {
                 }
 
-                String body = EduHttp.postH5(
-                        base + "/student/curriculum?xnxq01id=&kbjcmsid=" + kbjcmsid, token);
+                // 真实调用顺序（从诊断里抓到的）：
+                //   POST /Get_sjkbms                       → kbjcmsid
+                //   POST /getXnxqList                      → 学期 id，如 2026-2027-2
+                //   POST /teachingWeek                     → 所有周次
+                //   POST /student/curriculum?xnxq01id=&kbjcmsid=&week=N  → 该周课表
+                // 一次只给一周，所以按周拉全再合并。
+                String term = "";
+                try {
+                    String xn = EduHttp.postH5(base + "/getXnxqList", token);
+                    org.json.JSONArray arr = new org.json.JSONArray(xn);
+                    for (int i = 0; i < arr.length(); i++) {
+                        org.json.JSONObject o = arr.optJSONObject(i);
+                        if (o == null) continue;
+                        String id = o.optString("xnxq01id", "");
+                        if (!id.isEmpty() && (term.isEmpty() || "0".equals(o.optString("isdcqxq")))) {
+                            term = id;
+                            if ("0".equals(o.optString("isdcqxq"))) break;
+                        }
+                    }
+                } catch (Exception ignored) { }
 
+                java.util.List<Integer> weeks = new java.util.ArrayList<>();
+                try {
+                    String tw = EduHttp.postH5(base + "/teachingWeek", token);
+                    org.json.JSONArray arr = new org.json.JSONObject(tw).optJSONArray("data");
+                    if (arr != null) for (int i = 0; i < arr.length(); i++) {
+                        org.json.JSONObject o = arr.optJSONObject(i);
+                        if (o == null) continue;
+                        int w = o.optInt("week", 0);
+                        if (w > 0) weeks.add(w);
+                    }
+                } catch (Exception ignored) { }
+                if (weeks.isEmpty()) for (int w = 1; w <= 20; w++) weeks.add(w);
+
+                // 三次抓包一致：参数**全空**才返回整学期（带 classWeekDetails 的那 10 条），
+                // 一旦填上 xnxq01id/kbjcmsid/week，后端就只当「查某一周」，没课就回空数组。
+                // 所以固定用全空参数请求，一次拿全，本地再按周展开。
+                String body = EduHttp.postH5(base + "/student/curriculum?xnxq01id=&kbjcmsid=&week=", token);
+
+                java.util.LinkedHashMap<String, org.json.JSONObject> merged =
+                        new java.util.LinkedHashMap<>();
+                // 不再逐周补拉：实测 week=N 一律返回「当前周次未查询到课表！」，白跑 30 次
+                collectItems(body, merged);
+                dumpRaw("weeks-log.txt", "single-request: " + merged.size() + " 条");
                 if (body == null || body.startsWith("__ERR__")) {
-                    showDialog("课表抓取失败", String.valueOf(body));
+                    setStatus("课表抓取失败：" + String.valueOf(body));
                     curGrab = false;
                     return;
                 }
@@ -1164,7 +1442,7 @@ public class EduLoginActivity extends Activity {
                     EduCookies.saveAll(EduLoginActivity.this);
                     runOnUiThread(new Runnable() {
                         public void run() {
-                            toast("已抓取 " + cnt + " 条课程，顺手抓成绩…");
+                            toast("整学期课表已导入：" + cnt + " 门课，顺手抓成绩…");
                         }
                     });
                     // 同一个会话里直接打开成绩页（H5 的 #/student/semester_Score），
@@ -1179,7 +1457,7 @@ public class EduLoginActivity extends Activity {
                 }
 
                 String prev = body.length() > 1500 ? body.substring(0, 1500) + "…" : body;
-                showDialog("课表原文（未解析）", "kbjcmsid=" + kbjcmsid + NL() + NL() + prev);
+                setStatus("课表原文未解析，已落盘（点「诊断」可看）");
                 curGrab = false;
             }
         }).start();

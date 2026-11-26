@@ -128,6 +128,7 @@ public class MainActivity extends Activity {
             }
         });
 
+        NativeBridge.host = web;
         web.addJavascriptInterface(new NativeBridge(this), "Native");
         setContentView(web);
 
