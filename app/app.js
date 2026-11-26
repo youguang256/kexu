@@ -1414,9 +1414,7 @@
         field('学期名称', '<input type="text" data-set="termName" value="' + esc(st.termName) + '">') +
         '<div class="field stack"><label>开学第一周周一</label>' +
         dtPicker({ set: 'termStart', value: st.termStart, time: false, placeholder: '选择日期' }) + '</div>' +
-        field('总周数', '<input type="number" min="1" max="30" data-set="totalWeeks" value="' + st.totalWeeks + '">') +
-        '<div class="field"><label>周次校正<span class="hint">教务显示第 N 周时，这里填差值</span></label>' +
-        '<input type="number" min="-3" max="3" data-set="weekOffset" value="' + (st.weekOffset || 0) + '"></div>',
+        field('总周数', '<input type="number" min="1" max="30" data-set="totalWeeks" value="' + st.totalWeeks + '">'),
         '第 ' + S.currentWeek(state) + ' 周 / 共 ' + st.totalWeeks + ' 周') +
       '<button class="btn block" data-act="open-manager" style="margin-top:10px">全局课程管理</button>' +
       '</div>';
@@ -2232,14 +2230,12 @@
       '<div class="small muted" style="line-height:1.9;margin-bottom:12px">' +
       '支持三种：① 手机日历导出的 <b>.ics</b>；② 教务系统复制的表格（直接粘贴 HTML 或表格文本）；③ 自己整理的 <b>.csv</b>（列名：课程,教师,星期,开始节,结束节,周次,地点）。</div>' +
       (eduLoggedIn()
-        ? '<button class="btn primary block" data-act="edu-timetable">从教务系统同步课表</button>' +
+        ? '<button class="btn primary block" data-act="edu-jsxsd">从旧教务系统拉整学期课表</button>' +
+          '<button class="btn block" data-act="edu-timetable">从教务系统同步课表（新版 H5）</button>' +
           '<div class="small muted" style="margin:8px 0 14px">已登录教务系统 · <a href="javascript:void(0)" data-act="edu-logout">退出</a></div>'
         : '<button class="btn primary block" data-act="edu-login">登录教务系统</button>' +
           '<div class="small muted" style="margin:8px 0 14px">默认是企业微信扫码页：点「存二维码」→ 企业微信扫一扫 → 相册选图；不行就切「密码」</div>') +
       '<button class="btn block" data-act="pick-file">选择文件</button>' +
-      '<button class="btn block" data-act="pick-edu-json" style="margin-top:10px">导入教务原始数据（.json）</button>' +
-      '<div class="small muted" style="margin:8px 0 14px">手机里 <b>Download/CoursePilot/netlog.json</b> 或教务接口的返回值，选中即可，一次拿到整学期</div>' +
-      '<input type="file" id="edu-json-file" accept=".json,application/json" style="display:none">' +
       '<div class="form-row" style="margin-top:14px"><label>或者直接粘贴内容</label>' +
       '<textarea id="paste-area" placeholder="把课表表格 / ics 内容粘进来"></textarea></div>' +
       '<button class="btn block" data-act="parse-paste">解析粘贴内容</button>');
@@ -3140,6 +3136,11 @@
     if (act === 'edu-login') { eduLogin(); return; }
     if (act === 'edu-logout') { eduLogout(); return; }
     if (act === 'edu-timetable') { closeSheet(); eduSyncTimetable(); return; }
+    if (act === 'edu-jsxsd') {
+      closeSheet();
+      eduGrabJsxsd(false).catch(function (e) { toast('拉课表失败：' + e.message, 6000); });
+      return;
+    }
     if (act === 'edu-grades-portal') {
       var ng = window.Native;
       if (ng && typeof ng.openGradeCapture === 'function') {
@@ -3171,51 +3172,6 @@
       return;
     }
     if (act === 'pick-file') { pickFile('timetable', '.ics,.csv,.txt,.html,.htm,.json,text/*'); return; }
-    if (act === 'import-done') { closeSheet(); render(); return; }
-    if (act === 'pick-edu-json') {
-      var inp = document.getElementById('edu-json-file');
-      if (!inp) { toast('没找到文件入口'); return; }
-      inp.value = '';
-      inp.onchange = function () {
-        var f = inp.files && inp.files[0];
-        if (!f) return;
-        toast('正在读 ' + f.name + '…', 3000);
-        var fr = new FileReader();
-        fr.onload = function () {
-          var res;
-          try { res = parseEduJson(String(fr.result)); }
-          catch (e) { toast('这个文件读不出课表：' + e.message, 5000); return; }
-          if (!res.rows.length) {
-            openSheet('这个文件里没有课表',
-              '<div class="small muted" style="line-height:1.9">没找到带 classTime 的响应。<br>' +
-              '要选的是 <b>Download/CoursePilot/netlog.json</b>，或者在教务页面里点过课表之后存下来的接口返回值。</div>' +
-              '<button class="btn block" data-act="import-open" style="margin-top:14px">再选一次</button>');
-            return;
-          }
-          if (res.periods && res.periods.length >= 2) {
-            state.settings.periods = res.periods.map(function (p2, i) {
-              return { no: Number(p2.no) || (i + 1), start: p2.start, end: p2.end };
-            });
-          }
-          if (res.nowWeek) {
-            var d0 = new Date();
-            d0.setHours(0, 0, 0, 0);
-            d0.setDate(d0.getDate() - ((d0.getDay() + 6) % 7) - (res.nowWeek - 1) * 7);
-            state.settings.termStart = d0.getFullYear() + '-' + String(d0.getMonth() + 1).padStart(2, '0') + '-' + String(d0.getDate()).padStart(2, '0');
-            state.settings.termStartSet = true;
-            if (!state.settings.totalWeeks || state.settings.totalWeeks < 18) state.settings.totalWeeks = 20;
-          }
-          var n2 = importEduRows(res.rows);
-          S.save();
-          render();
-          showImportReport(res.rows);
-          toast('已导入 ' + n2 + ' 门课', 4000);
-        };
-        fr.readAsText(f);
-      };
-      inp.click();
-      return;
-    }
     if (act === 'parse-paste') {
       var ta = document.getElementById('paste-area');
       var text = ta ? ta.value : '';
@@ -3692,6 +3648,32 @@
     return { start: start, end: end };
   }
 
+  /**
+   * 换个地方抓：旧教务系统 jsxsd 的课表页。
+   * 一次 GET 就是**整学期**：每个格子里写着 "老师:XXX;时间:3,6-17周[1-2节];地点:笃行楼(笃107)"，
+   * 周次是明文，不需要按周请求，也不依赖 H5 那个只给当前周的接口。
+   */
+  function eduGrabJsxsd(quiet) {
+    var n = eduNative();
+    if (!n) return Promise.reject(new Error('网页版没有原生桥'));
+    if (!quiet) toast('正在从旧教务系统取整学期课表…', 6000);
+    return eduReq('https://jw.csuse.edu.cn/jsxsd/xskb/xskb_list.do?viweType=0', 'GET')
+      .then(function (html) {
+        if (!html || html.indexOf('kbdataUl') < 0) throw new Error('课表页没拿到（会话可能过期）');
+        var courses = window.JWParser.parseJwTimetable(html, { totalWeeks: 20 });
+        if (!courses.length) throw new Error('课表页解析出的课程是 0 门');
+        applyImport(courses, 'replace');
+        state.settings.lastSyncAt = Date.now();
+        S.save();
+        render();
+        var weeks = {};
+        courses.forEach(function (c) { (c.sessions || []).forEach(function (s) { (s.weeks || []).forEach(function (w) { weeks[w] = 1; }); }); });
+        var ws = Object.keys(weeks).map(Number).sort(function (a, b) { return a - b; });
+        toast('已从旧教务系统导入 ' + courses.length + ' 门课，覆盖第 ' + ws[0] + '–' + ws[ws.length - 1] + ' 周', 6000);
+        return courses.length;
+      });
+  }
+
   function eduSyncTimetable() {
     // APK：走适配器运行时（网页内抓取）——不再用 eduFetch 取 HTML 再猜解析
     var n = eduNative();
@@ -3811,24 +3793,8 @@
     });
     var list = Object.keys(courses).map(function (k) { return courses[k]; });
     if (!list.length) return 0;
-    // 接口的 nowWeek 就是「这周是第几周」，用它把学期起点倒推出来；
-    // 课程周次不再加减，直接用 classWeekDetails 的原值。
-    var n = nativeBridge();
-    var nowWeek = 0;
-    try { nowWeek = Number((n && n.takeEduNowWeek && n.takeEduNowWeek()) || 0); } catch (e) { nowWeek = 0; }
-    if (nowWeek > 0) {
-      // 周次按接口原值，不做偏移：netlog 证明「参数全空那次」返回的就是整学期数据，
-      // 页面切周只是前端按 classWeekDetails 过滤。
-      // 只把学期起点对齐到接口的 nowWeek，让「当前周」和页面一致。
-      var d = new Date();
-      d.setHours(0, 0, 0, 0);
-      d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - (nowWeek - 1) * 7);
-      state.settings.termStart = d.getFullYear() + '-' +
-        String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      state.settings.termStartSet = true;
-      if (!state.settings.totalWeeks || state.settings.totalWeeks < 18) state.settings.totalWeeks = 20;
-    } else if (!state.settings.termStartSet) {
-      // 拿不到 nowWeek 时的兜底
+    // 首次导入时铺一个合理学期起点（和 0.6.3 一致；用户改过就不覆盖）
+    if (!state.settings.termStartSet) {
       state.settings.termStart = '2026-09-07';
       state.settings.totalWeeks = 20;
       state.settings.termStartSet = true;
@@ -3855,89 +3821,29 @@
     return importEduRows(rows);
   }
 
-  /**
-   * 教务原始数据 → 课程行。三种形状都认：
-   *   ① netlog.json（[{u,t,s}] 数组，逐条找含 classTime 的响应）
-   *   ② curriculum 接口原样（{data:[{item:[]}]}）
-   *   ③ 已经摊平的 {courses:[...]}
-   * 周次用 classWeekDetails 原值，不做偏移。
-   */
-  function parseEduJson(text) {
-    var json = typeof text === 'string' ? JSON.parse(text) : text;
-    var bodies = [];
-    if (Array.isArray(json)) {
-      json.forEach(function (e) {
-        var t = e && (e.t || e.body || e.response);
-        if (typeof t === 'string' && t.indexOf('classTime') >= 0) {
-          try { bodies.push(JSON.parse(t)); } catch (err) {}
-        }
-      });
-    } else if (json && json.data) {
-      bodies.push(json);
-    }
-    var rows = [], seen = {}, periods = null, nowWeek = 0;
-    bodies.forEach(function (b) {
-      if (!nowWeek && b.nowWeek) nowWeek = Number(b.nowWeek) || 0;
-      if (!periods && Array.isArray(b.jcdatalist) && b.jcdatalist.length) periods = b.jcdatalist;
-      (Array.isArray(b.data) ? b.data : []).forEach(function (g) {
-        (g.item || []).forEach(function (it) {
-          var ct = String(it.classTime || '').padStart(5, '0');
-          var wd = Number(ct.slice(0, 1));
-          var s1 = Number(ct.slice(1, 3));
-          var s2 = Number(ct.slice(3, 5)) || s1;
-          if (!wd || !s1) return;
-          var weeks = String(it.classWeekDetails || it.classWeek || '')
-            .split(',').map(function (x) { return parseInt(x, 10); })
-            .filter(function (x) { return x > 0 && x < 30; });
-          weeks = weeks.filter(function (v, i, a) { return a.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
-          if (!weeks.length) weeks = [1];
-          var row = {
-            name: it.courseName || it.kcmc || '未命名课程',
-            teacher: it.teacherName || it.xm || '',
-            location: it.location || it.cdmc || '',
-            weekday: wd,
-            startPeriod: Math.ceil(s1 / 2),
-            endPeriod: Math.ceil(s2 / 2),
-            weeks: weeks
-          };
-          var sig = row.name + '|' + row.weekday + '|' + row.startPeriod + '|' + row.endPeriod + '|' + weeks.join(',');
-          if (seen[sig]) return;
-          seen[sig] = 1;
-          rows.push(row);
-        });
-      });
-    });
-    return { rows: rows, periods: periods, nowWeek: nowWeek };
-  }
-
-  /** 导入结果面板：门课数 + 覆盖周次 + 每周节数，一眼看出到底拿到了什么 */
-  function showImportReport(rows) {
-    if (!rows.length) return;
-    var byWeek = {};
-    rows.forEach(function (r) {
-      (r.weeks || []).forEach(function (w) { byWeek[w] = (byWeek[w] || 0) + 1; });
-    });
-    var ws = Object.keys(byWeek).map(Number).sort(function (a, b) { return a - b; });
-    var names = {};
-    rows.forEach(function (r) { names[r.name] = 1; });
-    var lines = ws.map(function (w) {
-      var n = byWeek[w];
-      return '<div class="rowline"><span>第 ' + w + ' 周</span><span class="muted">' + n + ' 节</span></div>';
-    }).join('');
-    openSheet('导入结果',
-      '<div class="small" style="line-height:2;margin-bottom:10px">' +
-      '<b>' + Object.keys(names).length + '</b> 门课 · <b>' + rows.length + '</b> 个时段 · 覆盖第 <b>' +
-      ws[0] + '–' + ws[ws.length - 1] + '</b> 周</div>' +
-      '<div class="imp-report">' + lines + '</div>' +
-      '<button class="btn primary block" data-act="import-done" style="margin-top:14px">知道了</button>');
-  }
-  window.__cpParseEduJson = parseEduJson;
-  window.__cpShowImportReport = showImportReport;
-
   window.onEduLoginChanged = function () {
     var n = nativeBridge();
     busyStep(2);
-    busyLog('教务已返回，正在解析课表…');
+    busyLog('教务已返回，先从旧教务系统取整学期课表…');
+
+    // 0.5) 主路径改成旧教务系统 jsxsd：一次拿到整学期，周次是明文
+    if (n && typeof n.eduFetch === 'function' && eduLoggedIn()) {
+      eduGrabJsxsd(true).then(function (cnt) {
+        busyStep(3);
+        busyLog('整学期课表已导入：' + cnt + ' 门课');
+        busyTimer = setTimeout(busyClose, 800);
+      }).catch(function (e) {
+        busyLog('旧教务系统这条路没走通：' + e.message + '，改用页面抓取');
+        legacyImport();
+      });
+      return;
+    }
+    legacyImport();
+  };
+
+  function legacyImport() {
+    var n = nativeBridge();
+    busyStep(2);
 
     // 0) 刚从「抓成绩」页回来：只有成绩、没有课表
     var gpack0 = (n && typeof n.takeEduGrades === 'function') ? n.takeEduGrades() : '';
@@ -3953,15 +3859,10 @@
       var pack = n.takeEduImport();
       if (pack) {
         try {
-          var payload = JSON.parse(pack);
-          var got = applyEduImport(payload);
+          var got = applyEduImport(JSON.parse(pack));
           if (got) {
             busyStep(3); busyLog('解析完成，共 ' + got + ' 门课'); toast('已导入 ' + got + ' 门课', 4000);
-            busyTimer = setTimeout(function () {
-              busyClose();
-              showImportReport(Array.isArray(payload.courses) ? payload.courses : []);
-            }, 600);
-            return;
+            busyTimer = setTimeout(busyClose, 600); return;
           }
         } catch (e) { /* 落到兼容路径 */ }
       }
