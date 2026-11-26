@@ -968,12 +968,47 @@
 
   /* ───────────── 学习通 ───────────── */
 
+  /**
+   * 学习通课程表整理。两个实际问题：
+   *   ① 抓回来一些「根本没上」的课（跨班/历史课/别人的课）—— 用教务课表当白名单过滤，
+   *      课表为空时不过滤，免得上不了。
+   *   ② 有一类课压根没有要刷的东西（没任务点、没章节、没待交作业），却显示 0%，
+   *      拉低总进度。这种按「没有任务 = 已完成」处理，进度条拉满。
+   */
+  function cxNormName(x) {
+    return String(x || '').replace(/[（）()\s·、,，.。:：\-—_]/g, '').toLowerCase();
+  }
+
+  function cxTidyCourses(list) {
+    var wl = (state.courses || []).map(function (c) { return cxNormName(c.name); }).filter(Boolean);
+    return list.map(function (c) {
+      var hasTask = (Number(c.taskTotal) || 0) > 0 || (Number(c.undoneChapters) || 0) > 0;
+      var pend = Number(c.workPending) || 0;
+      var noWork = !hasTask && pend === 0;
+      var pr = typeof c.progress === 'number' ? c.progress : null;
+      if (noWork) pr = 1;
+      return {
+        name: c.name, teacher: c.teacher, score: c.score,
+        taskDone: c.taskDone, taskTotal: c.taskTotal,
+        undoneChapters: c.undoneChapters,
+        workDone: c.workDone, workTotal: c.workTotal, workPending: c.workPending,
+        progress: pr, noWork: noWork
+      };
+    }).filter(function (c) {
+      if (!wl.length) return true;                       // 没有课表就不筛
+      var n = cxNormName(c.name);
+      if (!n) return false;
+      var hit = wl.some(function (w) { return w.indexOf(n) >= 0 || n.indexOf(w) >= 0; });
+      return hit || (Number(c.workPending) || 0) > 0;    // 有作业要交的绝不藏
+    });
+  }
+
   function renderCx() {
     var cx = state.cx || {};
     var proxy = (state.settings.proxyBase || '').trim();
     var connected = cx.status === 'ok';
     var tasks = cx.tasks || [];
-    var courses = cx.courses || [];
+    var courses = cxTidyCourses(cx.courses || []);
     var now = Date.now();
     var soon = tasks.filter(function (t) {
       var d = S.dueTime(t.due);
@@ -1113,6 +1148,7 @@
           (c.workTotal ? '<span>作业 ' + c.workDone + '/' + c.workTotal + '</span>' : '') +
           (c.workPending != null ? '<span>待交 ' + c.workPending + '</span>' : '') +
           (c.score != null ? '<span>成绩 ' + c.score + '</span>' : '') +
+          (c.noWork ? '<span class="chip ok">无需刷课</span>' : '') +
           '</div></div>' +
           '<div class="num cx-pct ' + (pr == null ? 'unknown' : cls) + '">' + (pr == null ? '—' : pr + '%') + '</div>' +
           '</div>' +
@@ -1373,6 +1409,13 @@
       : ({ granted: '已允许', denied: '已拒绝（去系统设置开）', default: '未开启', unsupported: '此环境不支持' }[perm] || perm);
     var html = '';
 
+    /* ── 更多：设置页第一条，版本/语言/许可/校园墙一步可达 ── */
+    html += '<button class="more-entry" data-act="open-more">' +
+      '<span class="me-main"><span class="me-title">更多</span>' +
+      '<span class="me-sub">版本、语言、许可、校园墙</span></span>' +
+      '<span class="me-dots" aria-hidden="true">···</span>' +
+      '</button>';
+
     /* ── 外观 ── */
     html += '<div class="sec-title">外观</div><div class="card">' +
       '<div class="field"><label>主题</label><div class="seg">' +
@@ -1480,12 +1523,6 @@
         '<br>APK 里手机直接登录教务（需校园网）；网页版走电脑上的 <b>node server.mjs</b>。</div>' +
       '</div>';
 
-
-    html += '<button class="more-entry" data-act="open-more">' +
-      '<span class="me-main"><span class="me-title">更多</span>' +
-      '<span class="me-sub">版本信息、语言、开源许可</span></span>' +
-      '<span class="me-dots" aria-hidden="true">···</span>' +
-      '</button>';
 
 
     /* ── 语言 ── */
@@ -3269,7 +3306,9 @@
             '<img class="cr-ava" src="./icons/' + x.id + '.jpg" alt="' + x.id + '">' +
             '<div class="cr-main"><div class="cr-name">' + x.id + '</div>' +
             '<div class="cr-role">' + x.role + '</div></div></div>';
-        }).join('') + '</div>');
+        }).join('') + '</div>' +
+        '<div class="cr-note">校园墙微信：<b>cskjxy2026</b>' +
+        '<span>想加课表适配、报 bug、要新功能，加这个号说一声</span></div>');
       return;
     }
     if (act === 'clear-all') {
