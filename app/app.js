@@ -4361,7 +4361,6 @@
     onboardKeepQuiet = false;
     openSheet('课序怎么用',
       '<div class="onb">' +
-        '<div class="onb-item"><b>更新</b><span>设置 → 更多 → 检查更新；或到 GitHub Releases 下最新 APK 覆盖安装，数据不会丢</span></div>' +
         '<div class="onb-item"><b>导入课表</b><span>课表页右上「导入」→ 登录教务（学号即可，密码默认也是学号），登录后自动抓整学期课表、考试、成绩</span></div>' +
         '<div class="onb-item"><b>学习通</b><span>学习通页 → 登录学习通 → 手机号 + 密码，登录后每小时自动同步进度和作业</span></div>' +
         '<div class="onb-item"><b>反馈</b><span>遇到 bug、想加课表适配，加下面的 QQ 群或微信说一声</span></div>' +
